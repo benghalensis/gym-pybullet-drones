@@ -29,7 +29,7 @@ import numpy as np
 import gym
 import torch
 from stable_baselines3.common.env_checker import check_env
-from stable_baselines3.common.cmd_util import make_vec_env # Module cmd_util will be renamed to env_util https://github.com/DLR-RM/stable-baselines3/pull/197
+from stable_baselines3.common.env_util import make_vec_env # Module cmd_util will be renamed to env_util https://github.com/DLR-RM/stable-baselines3/pull/197
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecTransposeImage
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3 import A2C
@@ -63,6 +63,8 @@ DEFAULT_ACT = ActionType('one_d_rpm')
 DEFAULT_CPU = 1
 DEFAULT_STEPS = 35000
 DEFAULT_OUTPUT_FOLDER = 'results'
+DEFAULT_LOAD = False
+DEFAULT_LOAD_PATH = None
 
 def run(
     env=DEFAULT_ENV,
@@ -71,8 +73,18 @@ def run(
     act=DEFAULT_ACT,
     cpu=DEFAULT_CPU,
     steps=DEFAULT_STEPS,
+    load=DEFAULT_LOAD,
+    load_exp=DEFAULT_LOAD_PATH,
     output_folder=DEFAULT_OUTPUT_FOLDER
 ):
+    #### Load directory for model ########################################
+    if load:
+        if os.path.isfile(load_exp+'/success_model.zip'):
+            load_path = load_exp+'/success_model.zip'
+        elif os.path.isfile(load_exp+'/best_model.zip'):
+            load_path = load_exp+'/best_model.zip'
+        else:
+            print("[ERROR]: no model under the specified path", load_exp)
 
     #### Save directory ########################################
     filename = os.path.join(output_folder, 'save-'+env+'-'+algo+'-'+obs.value+'-'+act.value+'-'+datetime.now().strftime("%m.%d.%Y_%H.%M.%S"))
@@ -80,10 +92,10 @@ def run(
         os.makedirs(filename+'/')
 
     #### Print out current git commit hash #####################
-    if (platform == "linux" or platform == "darwin") and ('GITHUB_ACTIONS' not in os.environ.keys()):
-        git_commit = subprocess.check_output(["git", "describe", "--tags"]).strip()
-        with open(filename+'/git_commit.txt', 'w+') as f:
-            f.write(str(git_commit))
+    # if (platform == "linux" or platform == "darwin") and ('GITHUB_ACTIONS' not in os.environ.keys()):
+    #     git_commit = subprocess.check_output(["git", "describe", "--tags"]).strip()
+    #     with open(filename+'/git_commit.txt', 'w+') as f:
+    #         f.write(str(git_commit))
 
     #### Warning ###############################################
     if env == 'tune' and act != ActionType.TUN:
@@ -164,6 +176,10 @@ def run(
                                                                   verbose=1
                                                                   )
 
+        if load:
+            print("[INFO] Model {} loaded successfully:".format(load_path))
+            model = PPO.load(load_path, env=train_env)
+
     #### Off-policy algorithms #################################
     offpolicy_kwargs = dict(activation_fn=torch.nn.ReLU,
                             net_arch=[512, 512, 256, 128]
@@ -192,6 +208,7 @@ def run(
                                                                 tensorboard_log=filename+'/tb/',
                                                                 verbose=1
                                                                 )
+
     if algo == 'ddpg':
         model = DDPG(td3ddpgMlpPolicy,
                     train_env,
@@ -276,7 +293,9 @@ if __name__ == "__main__":
     parser.add_argument('--obs',        default=DEFAULT_OBS,        type=ObservationType,                                                      help='Observation space (default: kin)', metavar='')
     parser.add_argument('--act',        default=DEFAULT_ACT,  type=ActionType,                                                           help='Action space (default: one_d_rpm)', metavar='')
     parser.add_argument('--cpu',        default=DEFAULT_CPU,          type=int,                                                                  help='Number of training environments (default: 1)', metavar='')        
-    parser.add_argument('--steps',        default=DEFAULT_STEPS,          type=int,                                                                  help='Number of training time steps (default: 35000)', metavar='')        
+    parser.add_argument('--steps',      default=DEFAULT_STEPS,          type=int,                                                                  help='Number of training time steps (default: 35000)', metavar='')
+    parser.add_argument('--load',       default=DEFAULT_LOAD, action='store_true', help='Load from results')
+    parser.add_argument('--load_exp',   default=DEFAULT_LOAD_PATH, type=str, help='Load path', metavar='')
     parser.add_argument('--output_folder',     default=DEFAULT_OUTPUT_FOLDER, type=str,           help='Folder where to save logs (default: "results")', metavar='')
     ARGS = parser.parse_args()
 
