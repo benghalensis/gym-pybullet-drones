@@ -3,6 +3,7 @@ import numpy as np
 import pybullet as p
 import pkg_resources
 import random
+from scipy.spatial.transform import Rotation as R
 
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
 from gym_pybullet_drones.envs.single_agent_rl.BaseSingleAgentAviary import ActionType, ObservationType, BaseSingleAgentAviary
@@ -101,7 +102,80 @@ class RacingDroneAviary(BaseSingleAgentAviary):
                         )
             self.obstacleIDs.append(obstacleID)
 
-        # Need to add obstacles
+    def _getGatesStateVector(self, nth_drone, gateIDs):
+        """Returns the state vector of the n-th drone.
+
+        Parameters
+        ----------
+        nth_drone : int
+            The ordinal number/position of the desired drone in list self.DRONE_IDS.
+
+        Returns
+            [o_1, alpha_1, o_2, alpha_2]
+            sperical coordinate o_1, o_2 = (p_r, p_theta, p_phi), 
+            alpha_1, alpha_2 = angle between gate normal and the vector pointing from the quadrotor to the center of gate i
+        """
+        # Get the drone pose
+        drone_state = self._getDroneStateVector(nth_drone)
+        drone_center = drone_state[0,3]
+        drone_rotation_matrix = R.from_quat(drone_state[3,7]).as_matrix()
+
+        # Get the gate pose
+        currentGateID = gateIDs[0]
+        nextGateID = gateIDs[1]
+        currentGatePos, currentGateOri = p.getBasePositionAndOrientation(objectUniqueId=currentGateID)
+        current_gate_rotation_matrix = R.from_quat(currentGateOri).as_matrix()
+        nextGatePos, nextGateOri = p.getBasePositionAndOrientation(objectUniqueId=nextGateID)
+        next_gate_rotation_matrix = R.from_quat(nextGateOri).as_matrix()
+
+        #### consider there is a vector p from plane coordinate system to gate center,
+        p = np.array(currentGatePos) - np.array(drone_center)
+
+        # get p_r: The distance between drone center and gate center
+        p_r = np.linalg.norm(p)
+
+        # get p_theta: 
+        p_along_z_axis = np.dot(drone_rotation_matrix[:,2], p) * drone_rotation_matrix[:,2]
+        p_along_xy_plane = p - p_along_z_axis
+        p_theta = np.arccos(np.dot(p_along_xy_plane, p)/np.linalg.norm(p)/np.linalg.norm(p_along_xy_plane))
+
+        # get p_phi: 
+        p_phi = np.arccos(np.dot(drone_rotation_matrix[:,2], p)/np.linalg.norm(p))
+
+        # get alpha_1: Note that the y axis of gate is the normal of the gate
+        alpha_1 = np.arccos(current_gate_rotation_matrix[:,1], p)/np.linalg.norm(p)
+
+        #### consider there is a vector q from first gate coordinate system to second gate center,
+        q = np.array(nextGatePos) - np.array(currentGatePos)
+
+        # get p_r: The distance between drone center and gate center
+        q_r = np.linalg.norm(q)
+
+        # get q_theta: 
+        q_along_z_axis = np.dot(current_gate_rotation_matrix[:,2], q) * current_gate_rotation_matrix[:,2]
+        q_along_xy_plane = q - q_along_z_axis
+        q_theta = np.arccos(np.dot(q_along_xy_plane, q)/np.linalg.norm(q)/np.linalg.norm(q_along_xy_plane))
+
+        # get q_phi: 
+        q_phi = np.arccos(np.dot(current_gate_rotation_matrix[:,2], q)/np.linalg.norm(q))
+
+        # get alpha_2: Note that the y axis of gate is the normal of the gate
+        alpha_2 = np.arccos(next_gate_rotation_matrix[:,1], q)/np.linalg.norm(q)
+
+        return np.array([p_r, p_theta, p_phi, alpha_1, q_r, q_theta, q_phi, alpha_2])
+
+    ################################################################################
+
+    def _computeObs(self):
+        """Computes the current observation.
+
+        Returns
+        -------
+        float
+            # e.g. return self._getDroneStateVector(0)
+
+        """
+        # TODO
 
     ################################################################################
     
