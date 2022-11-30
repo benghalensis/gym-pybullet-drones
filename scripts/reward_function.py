@@ -1,22 +1,21 @@
 import numpy as np
-import math
 
-g1 = np.array([0, 1, 5])  # gate1 centre
-g2 = np.array([0, 4, 5])  # gate2 centre
-# gm1 = np.array([[1, 2, 0], [1, 2, 0], [1, 2, ]])
-gm1 = np.identity(3)
-gm2 = np.identity(3)
-# gm2 = np.array([[1, 2, 5], [1, 6, 3], [8, 2, 3]])
-wt = np.array([1, 0, 0])  # body rates
+# g1 = np.array([0, 1, 5])  # gate1 centre
+# g2 = np.array([0, 4, 5])  # gate2 centre
+# # gm1 = np.array([[1, 2, 0], [1, 2, 0], [1, 2, ]])
+# gm1 = np.identity(3)
+# gm2 = np.identity(3)
+# # gm2 = np.array([[1, 2, 5], [1, 6, 3], [8, 2, 3]])
+# wt = np.array([1, 0, 0])  # body rates
 
-p = np.array([0, 2, 5])  # current position
-p_prev = np.array([0, 0, 0])  # previous position
-wg = 0.75  # side length of the rectangular gate
+# p = np.array([0, 2, 5])  # current position
+# p_prev = np.array([0, 0, 0])  # previous position
+# wg = 0.75  # side length of the rectangular gate
 
 
-dmax = 2  # specifies a threshold on the distance to the gate center in order to activate the safety reward
-a = 2  # hyperparameter that trades off between progress maximization and risk minimization
-b = -0.5  # weight for penalty body rate
+# dmax = 2  # specifies a threshold on the distance to the gate center in order to activate the safety reward
+# a = 2  # hyperparameter that trades off between progress maximization and risk minimization
+# b = -0.5  # weight for penalty body rate
 
 
 def dp(p, g, gm):

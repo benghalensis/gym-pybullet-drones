@@ -209,17 +209,17 @@ class RacingDroneAviary(BaseSingleAgentAviary):
             The reward.
 
         """
-
+        #TODO: get the previous position
         g1 = self.obstaclesCenterPosition[0]  # gate1 centre
         g2 = self.obstaclesCenterPosition[1]  # gate2 centre
 
         gm1 = self.obstaclesOrientation[0]
         gm2 = self.obstaclesOrientation[1]
 
-        wt = self.ang_v  # body rates
+        wt = self.ang_v[0]  # body rates
 
-        p = self.pos  # current position
-        p_prev = self.prev_pos  # previous position
+        p = self.pos[0]  # current position
+        p_prev = self.prev_pos[0]  # previous position
         wg = self.gate_width  # side length of the rectangular gate
 
         dmax = 2  # specifies a threshold on the distance to the gate center in order to activate the safety reward
