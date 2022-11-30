@@ -75,6 +75,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         self.obstaclesStd = obstaclesStd
         self.obstacleIDs = []
         self.gate_width = gate_width
+        self.current_obstable_index = 0
 
     ################################################################################
         
@@ -125,8 +126,12 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         nextGateID = gateIDs[1]
         currentGatePos, currentGateOri = p.getBasePositionAndOrientation(objectUniqueId=currentGateID)
         current_gate_rotation_matrix = R.from_quat(currentGateOri).as_matrix()
-        nextGatePos, nextGateOri = p.getBasePositionAndOrientation(objectUniqueId=nextGateID)
-        next_gate_rotation_matrix = R.from_quat(nextGateOri).as_matrix()
+        if nextGateID == -999:
+            next_gate_rotation_matrix = current_gate_rotation_matrix
+            nextGatePos = currentGatePos + current_gate_rotation_matrix @ np.array([[0],[1],[0]])
+        else:
+            nextGatePos, nextGateOri = p.getBasePositionAndOrientation(objectUniqueId=nextGateID)
+            next_gate_rotation_matrix = R.from_quat(nextGateOri).as_matrix()
 
         #### consider there is a vector p from plane coordinate system to gate center,
         p = np.array(currentGatePos) - np.array(drone_center)
@@ -172,10 +177,23 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         Returns
         -------
         float
-            # e.g. return self._getDroneStateVector(0)
+            quadrotor state: [quadrotor linear velocity, linear acceleration, rotation matrix, and angular velocity]
+            gate state: [quadrotor linear velocity, linear acceleration, rotation matrix, and angular velocity]
 
         """
-        # TODO
+        nth_drone = 0
+        rotation_matrix = R.from_quat(self.quat[nth_drone, :]).as_matrix()
+        quad_state = np.hstack((self.vel[nth_drone, :], self.acc[nth_drone, :], rotation_matrix.flatten(), self.ang_v[nth_drone, :]))
+
+        # Find the current gate and next gate
+        if self.current_obstable_index+1 < len(self.obstacleIDs):
+            gateIDs = [self.obstacleIDs[self.current_obstable_index], self.obstacleIDs[self.current_obstable_index+1]]
+        else:
+            gateIDs = [self.obstacleIDs[self.current_obstable_index], -999]
+        
+        gate_state = self._getGatesStateVector(nth_drone, gateIDs)
+
+        return np.hstack((quad_state, gate_state))
 
     ################################################################################
     
@@ -203,6 +221,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
             Whether the current episode is done.
 
         """
+        # update current_obstable_index
         if self.step_counter/self.SIM_FREQ > self.EPISODE_LEN_SEC:
             return True
         else:
