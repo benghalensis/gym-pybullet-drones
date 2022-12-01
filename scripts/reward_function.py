@@ -1,35 +1,24 @@
 import numpy as np
 
-# g1 = np.array([0, 1, 5])  # gate1 centre
-# g2 = np.array([0, 4, 5])  # gate2 centre
-# # gm1 = np.array([[1, 2, 0], [1, 2, 0], [1, 2, ]])
-# gm1 = np.identity(3)
-# gm2 = np.identity(3)
-# # gm2 = np.array([[1, 2, 5], [1, 6, 3], [8, 2, 3]])
-# wt = np.array([1, 0, 0])  # body rates
-
-# p = np.array([0, 2, 5])  # current position
-# p_prev = np.array([0, 0, 0])  # previous position
-# wg = 0.75  # side length of the rectangular gate
-
-
-# dmax = 2  # specifies a threshold on the distance to the gate center in order to activate the safety reward
-# a = 2  # hyperparameter that trades off between progress maximization and risk minimization
-# b = -0.5  # weight for penalty body rate
-
-
 def dp(p, g, gm):
     '''
     distance to the gate plane
     '''
-    return np.linalg.norm(np.dot(g - p, gm[:, 1]) / (np.linalg.norm(p - g)) * gm[:, 1])
+    vector_pg = g - p
+    gate_y_axis = gm[:, 1] # Should be a unit vector.
+
+    return np.linalg.norm(np.dot(vector_pg, gate_y_axis)) / np.linalg.norm(gate_y_axis)
 
 
 def dn(p, g, gm):
     '''
     distance of the quadrotor to the gate normal
     '''
-    return np.linalg.norm(g - p - np.dot(g - p, gm[:, 1]) / (np.linalg.norm(p - g)) * gm[:, 1])
+    vector_pg = g - p
+    gate_y_axis = gm[:, 1] # Should be a unit vector.
+    vector_pg_along_gate_y_axis = dp(p, g, gm) * gate_y_axis
+
+    return np.linalg.norm(vector_pg - vector_pg_along_gate_y_axis)
 
 
 def nearest_gate(p, g1, g2, gm1, gm2):
@@ -55,15 +44,15 @@ def s(p, g1, g2):
     return np.dot(p - g1, g2 - g1) / np.linalg.norm(g1 - g2)
 
 
-def rp(p, p_prev, g1, g2):
+def progress_reward(p, p_prev, g1, g2):
     '''
     Progress Reward
-    Increases when the 
+    Increases when the drone move in the direction joining gate1 and gate2
     '''
     return s(p, g1, g2) - s(p_prev, g1, g2)
 
 
-def rs(p, g, gm, dmax, wg):
+def safety_reward(p, g, gm, dmax, wg):
     '''
     Safety Reward (only activated when drone is within threshold dmax) 
     Value lies between 0 and -1.
@@ -74,7 +63,7 @@ def rs(p, g, gm, dmax, wg):
     return -f**2 * (1 - np.exp(-0.5 * dn(p, g, gm)**2 / v))
 
 
-def final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg):
+def final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg, debug=False):
     '''
     Final Reward
     p_crash position of crash
@@ -84,9 +73,11 @@ def final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg):
 
     wt_mag = np.linalg.norm(wt)
     g, gm = nearest_gate(p, g1, g2, gm1, gm2)
-    print("rp", rp(p, p_prev, g1, g2))
-    print("rs", rs(p, g, gm, dmax, wg))
-    reward = rp(p, p_prev, g1, g2) + a * rs(p, g, gm, dmax, wg) + b * wt_mag
+    if debug:
+        print("progress_reward:", progress_reward(p, p_prev, g1, g2))
+        print("safety_reward:", safety_reward(p, g, gm, dmax, wg))
+        print("wt_mag", wt_mag)
+    reward = progress_reward(p, p_prev, g1, g2) + a * safety_reward(p, g, gm, dmax, wg) + b * wt_mag
     if collision_check(p):
         dg = np.linalg.norm(p - g)
         rt = -min((dg / wg)**2, 20.0)
@@ -94,5 +85,23 @@ def final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg):
     else:
         return reward
 
+if __name__ == "__main__":
+    gate1_center = np.array([0, 2, 0.625])  # gate1 centre (The gate it has cleared)
+    gate2_center = np.array([0, 4, 0.625])  # gate2 centre (The gate in front of it)
+    gate1_rotation = np.identity(3)
+    gate2_rotation = np.identity(3)
+    ang_vel = np.array([0.0, 0.0, 0.0])  # body rates
+    debug = True
 
-print(final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg))
+    p = np.array([0.1, 1.0, 0.625])  # current position
+    p_prev = np.array([0, 0, 0.625])  # previous position
+    wg = 0.75  # side length of the rectangular gate
+
+    dmax = 2  # specifies a threshold on the distance to the gate center in order to activate the safety reward
+    a = 2  # hyperparameter that trades off between progress maximization and risk minimization
+    b = -0.5  # weight for penalty body rate
+
+    if debug:
+        print('dp(p, g, gm):', dp(p, gate1_center, gate1_rotation))
+        print('dn(p, g, gm):', dn(p, gate1_center, gate1_rotation))
+        print(final_reward(p, p_prev, gate1_center, gate2_center, gate1_rotation, gate2_rotation, a, b, dmax, ang_vel, wg, debug=debug))

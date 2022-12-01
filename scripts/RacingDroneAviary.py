@@ -225,8 +225,8 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         dmax = 2  # specifies a threshold on the distance to the gate center in order to activate the safety reward
         a = 2  # hyperparameter that trades off between progress maximization and risk minimization
         b = -0.5  # weight for penalty body rate
+        
         return final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg)
-        # return -10 * np.linalg.norm(np.array([0, -2*norm_ep_time, 0.75])-state[0:3])**2
 
     ################################################################################
 
