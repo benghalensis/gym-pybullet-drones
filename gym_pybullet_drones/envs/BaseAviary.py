@@ -450,6 +450,7 @@ class BaseAviary(gym.Env):
         self.rpy = np.zeros((self.NUM_DRONES, 3))
         self.vel = np.zeros((self.NUM_DRONES, 3))
         self.prev_vel = np.zeros((self.NUM_DRONES, 3))
+        self.acc = np.zeros((self.NUM_DRONES, 3))
         self.ang_v = np.zeros((self.NUM_DRONES, 3))
         if self.PHYSICS == Physics.DYN:
             self.rpy_rates = np.zeros((self.NUM_DRONES, 3))
@@ -491,10 +492,13 @@ class BaseAviary(gym.Env):
 
         """
         for i in range(self.NUM_DRONES):
+            self.prev_pos[i] = self.pos[i]
             self.pos[i], self.quat[i] = p.getBasePositionAndOrientation(self.DRONE_IDS[i], physicsClientId=self.CLIENT)
             self.rpy[i] = p.getEulerFromQuaternion(self.quat[i])
+            prev_vel = self.vel[i]
             self.vel[i], self.ang_v[i] = p.getBaseVelocity(self.DRONE_IDS[i], physicsClientId=self.CLIENT)
             self.acc[i] = (self.vel[i] - self.prev_vel[i]) / self.TIMESTEP
+            self.prev_vel[i] = prev_vel
 
     ################################################################################
 
@@ -1056,25 +1060,7 @@ class BaseAviary(gym.Env):
         Must be implemented in a subclass.
 
         """
-        # TODO: import the reward_function.py module
-        # TODO: get all parameters
-
-        g1 = np.array([0, 1, 5])  # gate1 centre
-        g2 = np.array([0, 4, 5])  # gate2 centre
-
-        gm1 = np.identity(3)
-        gm2 = np.identity(3)
-
-        wt = self.ang_v  # body rates
-
-        p = self.pos  # current position
-        p_prev = self.prev_pos  # previous position
-        wg = 0.75  # side length of the rectangular gate
-
-        dmax = 2  # specifies a threshold on the distance to the gate center in order to activate the safety reward
-        a = 2  # hyperparameter that trades off between progress maximization and risk minimization
-        b = -0.5  # weight for penalty body rate
-        return final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg)
+        raise NotImplementedError
 
     ################################################################################
 

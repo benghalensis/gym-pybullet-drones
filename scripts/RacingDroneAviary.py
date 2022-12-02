@@ -8,7 +8,7 @@ from scipy.spatial.transform import Rotation as R
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
 from gym_pybullet_drones.envs.single_agent_rl.BaseSingleAgentAviary import ActionType, ObservationType, BaseSingleAgentAviary
 from reward_function import final_reward
-
+from gym import spaces
 
 class RacingDroneAviary(BaseSingleAgentAviary):
     """Single agent RL problem: fly through a gate."""
@@ -59,6 +59,17 @@ class RacingDroneAviary(BaseSingleAgentAviary):
             The type of action space (1 or 3D; RPMS, thurst and torques, or waypoint with PID control)
 
         """
+        # Note that the length of obstaclesCenterPosition and obstaclesOrientation should be equal
+        assert len(obstaclesCenterPosition) == len(obstaclesOrientation)
+
+        self.obstaclesCenterPosition = obstaclesCenterPosition
+        self.obstaclesOrientation = obstaclesOrientation
+        self.obstaclesStd = obstaclesStd
+        self.gate_width = gate_width
+        # [WARNING] - spawn_position and orientation
+        self.spawn_position = np.zeros(3)
+        self.spawn_orientation = np.eye(3)
+
         super().__init__(drone_model=drone_model,
                          initial_xyzs=initial_xyzs,
                          initial_rpys=initial_rpys,
@@ -70,14 +81,22 @@ class RacingDroneAviary(BaseSingleAgentAviary):
                          obs=obs,
                          act=act
                          )
-        # Note that the length of obstaclesCenterPosition and obstaclesOrientation should be equal
-        assert len(obstaclesCenterPosition) == len(obstaclesOrientation)
-        self.obstaclesCenterPosition = obstaclesCenterPosition
-        self.obstaclesOrientation = obstaclesOrientation
-        self.obstaclesStd = obstaclesStd
+
+    ################################################################################
+
+    def _housekeeping(self):
+        """Housekeeping function.
+
+        Allocation and zero-ing of the variables and PyBullet's parameters/objects
+        in the `reset()` function.
+
+        """
         self.obstacleIDs = []
-        self.gate_width = gate_width
         self.current_obstable_index = 0
+        self.circuit_complete = False
+        self.crashed = False
+        self.crashed_into_gate = False
+        super()._housekeeping()
 
     ################################################################################
 
@@ -87,7 +106,6 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         Extends the superclass method and add the gate build of cubes and an architrave.
 
         """
-        # super()._addObstacles() # Has functions relate to Camera on the drone
         n = len(self.obstaclesCenterPosition)
 
         for i in range(n):
@@ -121,37 +139,38 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         """
         # Get the drone pose
         drone_state = self._getDroneStateVector(nth_drone)
-        drone_center = drone_state[0, 3]
-        drone_rotation_matrix = R.from_quat(drone_state[3, 7]).as_matrix()
+        drone_center = drone_state[0:3]
+        drone_rotation_matrix = R.from_quat(drone_state[3:7]).as_matrix()
 
         # Get the gate pose
         currentGateID = gateIDs[0]
         nextGateID = gateIDs[1]
-        currentGatePos, currentGateOri = p.getBasePositionAndOrientation(objectUniqueId=currentGateID)
+       
+        currentGatePos, currentGateOri = p.getBasePositionAndOrientation(bodyUniqueId=currentGateID)
         current_gate_rotation_matrix = R.from_quat(currentGateOri).as_matrix()
         if nextGateID == -999:
             next_gate_rotation_matrix = current_gate_rotation_matrix
-            nextGatePos = currentGatePos + current_gate_rotation_matrix @ np.array([[0], [1], [0]])
+            nextGatePos = np.array(currentGatePos) + (current_gate_rotation_matrix @ np.array([[0], [1], [0]])).flatten()
         else:
-            nextGatePos, nextGateOri = p.getBasePositionAndOrientation(objectUniqueId=nextGateID)
+            nextGatePos, nextGateOri = p.getBasePositionAndOrientation(bodyUniqueId=nextGateID)
             next_gate_rotation_matrix = R.from_quat(nextGateOri).as_matrix()
 
         # consider there is a vector p from plane coordinate system to gate center,
-        p = np.array(currentGatePos) - np.array(drone_center)
+        vec_p = np.array(currentGatePos) - np.array(drone_center)
 
         # get p_r: The distance between drone center and gate center
-        p_r = np.linalg.norm(p)
+        p_r = np.linalg.norm(vec_p)
 
         # get p_theta:
-        p_along_z_axis = np.dot(drone_rotation_matrix[:, 2], p) * drone_rotation_matrix[:, 2]
-        p_along_xy_plane = p - p_along_z_axis
-        p_theta = np.arccos(np.dot(p_along_xy_plane, p) / np.linalg.norm(p) / np.linalg.norm(p_along_xy_plane))
+        p_along_z_axis = np.dot(drone_rotation_matrix[:, 2], vec_p) * drone_rotation_matrix[:, 2]
+        p_along_xy_plane = vec_p - p_along_z_axis
+        p_theta = np.arccos(np.dot(p_along_xy_plane, vec_p) / np.linalg.norm(vec_p) / np.linalg.norm(p_along_xy_plane))
 
         # get p_phi:
-        p_phi = np.arccos(np.dot(drone_rotation_matrix[:, 2], p) / np.linalg.norm(p))
+        p_phi = np.arccos(np.dot(drone_rotation_matrix[:, 2], vec_p) / np.linalg.norm(vec_p))
 
         # get alpha_1: Note that the y axis of gate is the normal of the gate
-        alpha_1 = np.arccos(current_gate_rotation_matrix[:, 1], p) / np.linalg.norm(p)
+        alpha_1 = np.arccos(np.dot(current_gate_rotation_matrix[:, 1], vec_p) / np.linalg.norm(vec_p))
 
         # consider there is a vector q from first gate coordinate system to second gate center,
         q = np.array(nextGatePos) - np.array(currentGatePos)
@@ -168,9 +187,18 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         q_phi = np.arccos(np.dot(current_gate_rotation_matrix[:, 2], q) / np.linalg.norm(q))
 
         # get alpha_2: Note that the y axis of gate is the normal of the gate
-        alpha_2 = np.arccos(next_gate_rotation_matrix[:, 1], q) / np.linalg.norm(q)
+        alpha_2 = np.arccos(np.dot(next_gate_rotation_matrix[:, 1], q) / np.linalg.norm(q))
 
         return np.array([p_r, p_theta, p_phi, alpha_1, q_r, q_theta, q_phi, alpha_2])
+
+    ################################################################################
+
+    def _observationSpace(self):
+        #### OBS OF SIZE 20 (WITH QUATERNION AND RPMS)
+        # Observation vector ###   v_x   v_y   v_z   a_x   a_y   a_z   r11   r12   r13   r21   r22   r23  r31   r32   r33   w_1   w_2   w_3   p_r   p_th  p_phi a_1   q_r   q_th  q_phi  a_2
+        obs_lower_bound = np.array([-1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,    0,    0,   0,    0,    0,    0,    0,    0])
+        obs_upper_bound = np.array([ 1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,   1,    1,    1,    1,    1,    1])
+        return spaces.Box(low=obs_lower_bound, high=obs_upper_bound, dtype=np.float32)
 
     ################################################################################
 
@@ -196,9 +224,40 @@ class RacingDroneAviary(BaseSingleAgentAviary):
 
         gate_state = self._getGatesStateVector(nth_drone, gateIDs)
 
-        return np.hstack((quad_state, gate_state))
+        full_state = np.hstack((quad_state, gate_state))
+
+        ############################################################
+        #### OBS OF SIZE 20 (WITH QUATERNION AND RPMS)
+        #### Observation vector ###   v_x   v_y   v_z   a_x   a_y   a_z   r11   r12   r13   r21   r22   r23  r31   r32   r33   w_1   w_2   w_3   p_r   p_th  p_phi a_1   q_r   q_th  q_phi a_2
+        # obs_lower_bound = np.array([-1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,    0,    0,   0,    0,    0,    0,    0,    0])
+        # obs_upper_bound = np.array([ 1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,   1,    1,    1,    1,    1,    1])
+        ############################################################
+
+        return self._clipAndNormalizeState(full_state)
 
     ################################################################################
+
+    def _cleared_obstacle(self):
+        current_gate_center = self.obstaclesCenterPosition[self.current_obstable_index]
+        current_gate_rotation = R.from_euler('xyz', self.obstaclesOrientation[self.current_obstable_index]).as_matrix()
+
+        plane_normal = current_gate_rotation[:,1]
+        d = -np.dot(plane_normal, current_gate_center)
+
+        pos = self.pos[0]
+
+        if np.dot(plane_normal, pos) + d > 0:
+            self.current_obstable_index += 1
+
+        if self.current_obstable_index == len(self.obstacleIDs):
+            self.circuit_complete = True
+
+        contact_information = p.getContactPoints()
+        if contact_information:
+            body_ids = contact_information[1:3]
+            if any(item in self.obstacleIDs for item in body_ids):
+                self.crashed_into_gate = True
+            self.crashed = True
 
     def _computeReward(self):
         """Computes the current reward value.
@@ -209,12 +268,24 @@ class RacingDroneAviary(BaseSingleAgentAviary):
             The reward.
 
         """
-        #TODO: get the previous position
-        g1 = self.obstaclesCenterPosition[0]  # gate1 centre
-        g2 = self.obstaclesCenterPosition[1]  # gate2 centre
+        # Check if the obstable has been cleared and change the current obstacle.
+        self._cleared_obstacle()
 
-        gm1 = self.obstaclesOrientation[0]
-        gm2 = self.obstaclesOrientation[1]
+        if self.current_obstable_index-1 < 0:
+            prev_gate_center = self.spawn_position
+            prev_gate_rotation = self.spawn_orientation
+        else:
+            prev_gate_id = self.obstacleIDs[self.current_obstable_index-1]
+            prev_gate_center = np.array(self.obstaclesCenterPosition[self.current_obstable_index-1])  # prev_gate_center centre
+            prev_gate_rotation = R.from_euler('xyz', self.obstaclesOrientation[self.current_obstable_index-1]).as_matrix()
+        
+        current_gate_id = self.obstacleIDs[self.current_obstable_index]
+        print("self.current_obstable_index:",self.current_obstable_index)
+        print("current_gate_id:",current_gate_id)
+        current_gate_center = np.array(self.obstaclesCenterPosition[self.current_obstable_index])  # current_gate_center centre
+        print("current_gate_center:", current_gate_center)
+        current_gate_rotation = R.from_euler('xyz', self.obstaclesOrientation[self.current_obstable_index]).as_matrix()
+        print("current_gate_rotation:", current_gate_rotation)
 
         wt = self.ang_v[0]  # body rates
 
@@ -223,10 +294,12 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         wg = self.gate_width  # side length of the rectangular gate
 
         dmax = 2  # specifies a threshold on the distance to the gate center in order to activate the safety reward
-        a = 2  # hyperparameter that trades off between progress maximization and risk minimization
-        b = -0.5  # weight for penalty body rate
-        
-        return final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg)
+        a = 0.1  # hyperparameter that trades off between progress maximization and risk minimization
+        b = -0.1  # weight for penalty body rate
+
+        reward = final_reward(p, p_prev, prev_gate_center, current_gate_center, prev_gate_rotation, current_gate_rotation, a, b, dmax, wt, wg, crashed=self.crashed_into_gate)
+        print("reward:", reward)
+        return reward
 
     ################################################################################
 
@@ -239,8 +312,11 @@ class RacingDroneAviary(BaseSingleAgentAviary):
             Whether the current episode is done.
 
         """
-        # update current_obstable_index
         if self.step_counter / self.SIM_FREQ > self.EPISODE_LEN_SEC:
+            return True
+        elif self.circuit_complete:
+            return True
+        elif self.crashed:
             return True
         else:
             return False
@@ -284,71 +360,95 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         MAX_XY = MAX_LIN_VEL_XY * self.EPISODE_LEN_SEC
         MAX_Z = MAX_LIN_VEL_Z * self.EPISODE_LEN_SEC
 
+        MAX_LIN_ACC_XY = 5
+        MAX_LIN_ACC_Z = 5
+
         MAX_PITCH_ROLL = np.pi  # Full range
 
-        clipped_pos_xy = np.clip(state[0:2], -MAX_XY, MAX_XY)
-        clipped_pos_z = np.clip(state[2], 0, MAX_Z)
-        clipped_rp = np.clip(state[7:9], -MAX_PITCH_ROLL, MAX_PITCH_ROLL)
-        clipped_vel_xy = np.clip(state[10:12], -MAX_LIN_VEL_XY, MAX_LIN_VEL_XY)
-        clipped_vel_z = np.clip(state[12], -MAX_LIN_VEL_Z, MAX_LIN_VEL_Z)
+        MAX_DIST_TO_GATE = 5
+
+        # v_x   v_y
+        clipped_vel_xy = np.clip(state[0:2], -MAX_LIN_VEL_XY, MAX_LIN_VEL_XY)
+        # v_z
+        clipped_vel_z = np.clip(state[2], -MAX_LIN_VEL_Z, MAX_LIN_VEL_Z)
+        # a_x   a_y
+        clipped_acc_xy = np.clip(state[3:5], -MAX_LIN_ACC_XY, MAX_LIN_ACC_XY)
+        # a_z
+        clipped_acc_z = np.clip(state[5], -MAX_LIN_ACC_Z, MAX_LIN_ACC_Z)
+        # w_1   w_2   w_3
+
+        # p_r  p_th  p_phi a_1   q_r   q_th  q_phi a_2
+        clipped_p_r = np.clip(state[18], 0, MAX_DIST_TO_GATE)
+        clipped_q_r = np.clip(state[22], 0, MAX_DIST_TO_GATE)
 
         if self.GUI:
             self._clipAndNormalizeStateWarning(state,
-                                               clipped_pos_xy,
-                                               clipped_pos_z,
-                                               clipped_rp,
                                                clipped_vel_xy,
-                                               clipped_vel_z
+                                               clipped_vel_z,
+                                               clipped_acc_xy,
+                                               clipped_acc_z,
+                                               clipped_p_r,
+                                               clipped_q_r
                                                )
 
-        normalized_pos_xy = clipped_pos_xy / MAX_XY
-        normalized_pos_z = clipped_pos_z / MAX_Z
-        normalized_rp = clipped_rp / MAX_PITCH_ROLL
-        normalized_y = state[9] / np.pi  # No reason to clip
         normalized_vel_xy = clipped_vel_xy / MAX_LIN_VEL_XY
         normalized_vel_z = clipped_vel_z / MAX_LIN_VEL_XY
-        normalized_ang_vel = state[13:16] / np.linalg.norm(state[13:16]) if np.linalg.norm(state[13:16]) != 0 else state[13:16]
+        normalized_acc_xy = clipped_acc_xy / MAX_LIN_ACC_XY
+        normalized_acc_z = clipped_acc_z / MAX_LIN_ACC_Z
+        # I don't know why this is done
+        normalized_ang_vel = state[15:18] / np.linalg.norm(state[13:16]) if np.linalg.norm(state[13:16]) != 0 else state[13:16]
+        normalized_p_r = clipped_p_r / MAX_DIST_TO_GATE
+        normalized_p_theta = state[19]
+        normalized_p_phi = state[20]
+        normalized_a_1 = state[21]
+        normalized_q_r = clipped_q_r / MAX_DIST_TO_GATE
+        normalized_q_theta = state[23]
+        normalized_q_phi = state[24]
+        normalized_a_2 = state[25]
 
-        norm_and_clipped = np.hstack([normalized_pos_xy,
-                                      normalized_pos_z,
-                                      state[3:7],
-                                      normalized_rp,
-                                      normalized_y,
-                                      normalized_vel_xy,
+        norm_and_clipped = np.hstack([normalized_vel_xy,
                                       normalized_vel_z,
+                                      normalized_acc_xy,
+                                      normalized_acc_z,
+                                      state[7:16],
                                       normalized_ang_vel,
-                                      state[16:20]
-                                      ]).reshape(20,)
+                                      normalized_p_r,
+                                      normalized_p_theta,
+                                      normalized_p_phi,
+                                      normalized_a_1,
+                                      normalized_q_r,
+                                      normalized_q_theta,
+                                      normalized_q_phi,
+                                      normalized_a_2,
+                                      ]).reshape(26,)
 
         return norm_and_clipped
-
-    def _clipAndNormalizeTrackState(self, track_state):
-        # TODO
-        # Clip the track states
-        pass
 
     ################################################################################
 
     def _clipAndNormalizeStateWarning(self,
                                       state,
-                                      clipped_pos_xy,
-                                      clipped_pos_z,
-                                      clipped_rp,
                                       clipped_vel_xy,
                                       clipped_vel_z,
+                                      clipped_acc_xy,
+                                      clipped_acc_z,
+                                      clipped_p_r,
+                                      clipped_q_r,
                                       ):
         """Debugging printouts associated to `_clipAndNormalizeState`.
 
         Print a warning if values in a state vector is out of the clipping range.
 
         """
-        if not(clipped_pos_xy == np.array(state[0:2])).all():
-            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped xy position [{:.2f} {:.2f}]".format(state[0], state[1]))
-        if not(clipped_pos_z == np.array(state[2])).all():
-            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped z position [{:.2f}]".format(state[2]))
-        if not(clipped_rp == np.array(state[7:9])).all():
-            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped roll/pitch [{:.2f} {:.2f}]".format(state[7], state[8]))
-        if not(clipped_vel_xy == np.array(state[10:12])).all():
-            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped xy velocity [{:.2f} {:.2f}]".format(state[10], state[11]))
-        if not(clipped_vel_z == np.array(state[12])).all():
-            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped z velocity [{:.2f}]".format(state[12]))
+        if not(clipped_vel_xy == np.array(state[0:2])).all():
+            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped xy velocity [{:.2f} {:.2f}]".format(state[0], state[1]))
+        if not(clipped_vel_z == np.array(state[2])).all():
+            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped z velocity [{:.2f}]".format(state[2]))
+        if not(clipped_acc_xy == np.array(state[3:5])).all():
+            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped xy accleration [{:.2f} {:.2f}]".format(state[3], state[4]))
+        if not(clipped_acc_z == np.array(state[5])).all():
+            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped z accleration [{:.2f}]".format(state[5]))
+        if not(clipped_p_r == np.array(state[18])).all():
+            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped p_r [{:.2f}]".format(state[18]))
+        if not(clipped_q_r == np.array(state[22])).all():
+            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped q_r [{:.2f}]".format(state[22]))
