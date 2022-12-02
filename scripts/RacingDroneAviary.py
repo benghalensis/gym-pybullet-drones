@@ -271,6 +271,9 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         # Check if the obstable has been cleared and change the current obstacle.
         self._cleared_obstacle()
 
+        if self.circuit_complete:
+            return 0.0
+
         if self.current_obstable_index-1 < 0:
             prev_gate_center = self.spawn_position
             prev_gate_rotation = self.spawn_orientation
@@ -293,9 +296,9 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         p_prev = self.prev_pos[0]  # previous position
         wg = self.gate_width  # side length of the rectangular gate
 
-        dmax = 2  # specifies a threshold on the distance to the gate center in order to activate the safety reward
+        dmax = 1  # specifies a threshold on the distance to the gate center in order to activate the safety reward
         a = 0.1  # hyperparameter that trades off between progress maximization and risk minimization
-        b = -0.1  # weight for penalty body rate
+        b = -0.0  # weight for penalty body rate
 
         reward = final_reward(p, p_prev, prev_gate_center, current_gate_center, prev_gate_rotation, current_gate_rotation, a, b, dmax, wt, wg, crashed=self.crashed_into_gate)
         print("reward:", reward)

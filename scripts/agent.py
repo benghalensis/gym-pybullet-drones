@@ -25,7 +25,7 @@ DEFAULT_ALGO = 'ppo'
 DEFAULT_OBS = ObservationType('kin')
 DEFAULT_ACT = ActionType('rpm')
 DEFAULT_CPU = 1
-DEFAULT_STEPS = 35000
+DEFAULT_STEPS = 350000
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_LOAD = False
 DEFAULT_LOAD_PATH = None
@@ -44,6 +44,7 @@ def run(
 
     #### Load directory for model ########################################
     if load:
+        print("load_exp:", load_exp)
         if os.path.isfile(load_exp+'/success_model.zip'):
             load_path = load_exp+'/success_model.zip'
         elif os.path.isfile(load_exp+'/best_model.zip'):
@@ -68,7 +69,7 @@ def run(
                          obstaclesOrientation=obstaclesOrientation,
                          obstaclesStd=obstaclesStd,
                          gate_width=gate_width,
-                         gui=True
+                         gui=False,
                          )
     train_env = make_vec_env(RacingDroneAviary,
                             env_kwargs=sa_env_kwargs,
@@ -82,10 +83,13 @@ def run(
                             obstaclesCenterPosition=obstaclesCenterPosition,
                             obstaclesOrientation=obstaclesOrientation,
                             obstaclesStd=obstaclesStd,
-                            gate_width=gate_width,)
+                            gate_width=gate_width,
+                            gui=True)
 
-    onpolicy_kwargs = dict(activation_fn=torch.nn.ReLU,
-                           net_arch=[512, 512, dict(vf=[256, 128], pi=[256, 128])])
+    # onpolicy_kwargs = dict(activation_fn=torch.nn.ReLU,
+    #                        net_arch=[512, 512, dict(vf=[256, 128], pi=[256, 128])])
+    onpolicy_kwargs = dict(activation_fn=torch.nn.Tanh,
+                           net_arch=[dict(vf=[128, 128], pi=[128, 128])])
 
     #### Train the model #######################################
     callback_on_best = StopTrainingOnRewardThreshold(reward_threshold=EPISODE_REWARD_THRESHOLD,
