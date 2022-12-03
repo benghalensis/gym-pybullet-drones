@@ -117,7 +117,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
             if center[2] < self.gate_width / 2:
                 center[2] = self.gate_width / 2
 
-            obstacle_ID_list =_build_gate(self.obstaclesCenterPosition[i], p.getQuaternionFromEuler(self.obstaclesOrientation[i]))
+            obstacle_ID_list =_build_gate(self.obstaclesCenterPosition[i], p.getQuaternionFromEuler(self.obstaclesOrientation[i]), client=self.CLIENT)
 
             self.obstacleIDs += obstacle_ID_list
 
@@ -244,7 +244,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         if self.current_obstable_index == len(self.obstacleIDs):
             self.circuit_complete = True
 
-        contact_information = p.getContactPoints()
+        contact_information = p.getContactPoints(physicsClientId=self.CLIENT)
         if contact_information:
             body_ids = contact_information[1:3]
             if any(item in self.obstacleIDs for item in body_ids):
@@ -390,13 +390,13 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         # I don't know why this is done
         normalized_ang_vel = state[15:18] / np.linalg.norm(state[13:16]) if np.linalg.norm(state[13:16]) != 0 else state[13:16]
         normalized_p_r = clipped_p_r / MAX_DIST_TO_GATE
-        normalized_p_theta = state[19]
-        normalized_p_phi = state[20]
-        normalized_a_1 = state[21]
+        normalized_p_theta = state[19] / MAX_PITCH_ROLL
+        normalized_p_phi = state[20] / MAX_PITCH_ROLL
+        normalized_a_1 = state[21] / MAX_PITCH_ROLL
         normalized_q_r = clipped_q_r / MAX_DIST_TO_GATE
-        normalized_q_theta = state[23]
-        normalized_q_phi = state[24]
-        normalized_a_2 = state[25]
+        normalized_q_theta = state[23] / MAX_PITCH_ROLL
+        normalized_q_phi = state[24] / MAX_PITCH_ROLL
+        normalized_a_2 = state[25] / MAX_PITCH_ROLL
 
         norm_and_clipped = np.hstack([normalized_vel_xy,
                                       normalized_vel_z,

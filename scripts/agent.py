@@ -85,6 +85,21 @@ def run(
                             obstaclesStd=obstaclesStd,
                             gate_width=gate_width,
                             gui=True)
+    # eval_env_kwargs = dict(aggregate_phy_steps=shared_constants.AGGR_PHY_STEPS, 
+    #                      obs=obs, 
+    #                      act=act, 
+    #                      obstaclesCenterPosition=obstaclesCenterPosition,
+    #                      obstaclesOrientation=obstaclesOrientation,
+    #                      obstaclesStd=obstaclesStd,
+    #                      gate_width=gate_width,
+    #                      gui=True,
+    #                      )
+
+    # eval_env = make_vec_env(RacingDroneAviary,
+    #                         env_kwargs=eval_env_kwargs,
+    #                         n_envs=cpu,
+    #                         seed=0
+    #                         )
 
     # onpolicy_kwargs = dict(activation_fn=torch.nn.ReLU,
     #                        net_arch=[512, 512, dict(vf=[256, 128], pi=[256, 128])])
@@ -102,7 +117,7 @@ def run(
                                  log_path=filename+'/',
                                  eval_freq=int(2000/cpu),
                                  deterministic=True,
-                                 render=True
+                                 render=False
                                  )
 
     model = PPO(a2cppoMlpPolicy,

@@ -12,7 +12,7 @@ import numpy as np
 GATE_DIMENSION = [0.75, 1.25, 0.2]
 
 
-def _build_gate(center, orientation):
+def _build_gate(center, orientation, client):
     sphereRadius = 0.05
     center = np.array(center)
     rotation = R.from_quat(orientation).as_matrix()
@@ -37,35 +37,39 @@ def _build_gate(center, orientation):
     roof_center = center + delta * z_axis
     floor_center = center - delta * z_axis
 
-    piller_collision_ID = p.createCollisionShape(p.GEOM_BOX, halfExtents=[piller_x/2, piller_y/2, piller_z/2])
-    piller_visual_ID = p.createVisualShape(p.GEOM_BOX, halfExtents=[piller_x/2, piller_y/2, piller_z/2])
+    piller_collision_ID = p.createCollisionShape(p.GEOM_BOX, halfExtents=[piller_x/2, piller_y/2, piller_z/2], physicsClientId=client)
+    piller_visual_ID = p.createVisualShape(p.GEOM_BOX, halfExtents=[piller_x/2, piller_y/2, piller_z/2], physicsClientId=client)
 
-    slab_collision_ID = p.createCollisionShape(p.GEOM_BOX, halfExtents=[slab_x/2, slab_y/2, slab_z/2])
-    slab_visual_ID = p.createCollisionShape(p.GEOM_BOX, halfExtents=[slab_x/2, slab_y/2, slab_z/2])
+    slab_collision_ID = p.createCollisionShape(p.GEOM_BOX, halfExtents=[slab_x/2, slab_y/2, slab_z/2], physicsClientId=client)
+    slab_visual_ID = p.createCollisionShape(p.GEOM_BOX, halfExtents=[slab_x/2, slab_y/2, slab_z/2], physicsClientId=client)
 
     piller_1_ID = p.createMultiBody(mass, 
                                   piller_collision_ID, 
                                   piller_visual_ID, 
                                   piller_1_center, 
-                                  orientation,)
+                                  orientation,
+                                  physicsClientId=client)
 
     piller_2_ID = p.createMultiBody(mass, 
                                   piller_collision_ID, 
                                   piller_visual_ID, 
                                   piller_2_center, 
-                                  orientation,)
+                                  orientation,
+                                  physicsClientId=client)
 
     roof_ID = p.createMultiBody(mass, 
                                   slab_collision_ID, 
                                   slab_visual_ID, 
                                   roof_center, 
-                                  orientation,)
+                                  orientation,
+                                  physicsClientId=client)
 
     floor_ID = p.createMultiBody(mass, 
                                   slab_collision_ID, 
                                   slab_visual_ID, 
                                   floor_center, 
-                                  orientation,)
+                                  orientation,
+                                  physicsClientId=client)
 
     piller_1_constraint = p.createConstraint(piller_1_ID, -1, -1, -1, 
                                              p.JOINT_FIXED, 
@@ -73,7 +77,8 @@ def _build_gate(center, orientation):
                                              [0, 0, 0], 
                                              piller_1_center, 
                                              parentFrameOrientation=[0, 0, 0, 1],
-                                             childFrameOrientation=orientation)
+                                             childFrameOrientation=orientation,
+                                             physicsClientId=client)
 
     piller_2_constraint = p.createConstraint(piller_2_ID, -1, -1, -1, 
                                              p.JOINT_FIXED,
@@ -81,14 +86,16 @@ def _build_gate(center, orientation):
                                              [0, 0, 0], 
                                              piller_2_center,
                                              parentFrameOrientation=[0, 0, 0, 1],
-                                             childFrameOrientation=orientation)
+                                             childFrameOrientation=orientation,
+                                             physicsClientId=client)
 
     roof_constraint = p.createConstraint(roof_ID, -1, -1, -1, p.JOINT_FIXED, 
                                              [0, 0, 0], 
                                              [0, 0, 0], 
                                              roof_center,
                                              parentFrameOrientation=[0, 0, 0, 1],
-                                             childFrameOrientation=orientation)
+                                             childFrameOrientation=orientation,
+                                             physicsClientId=client)
 
     floor_constraint = p.createConstraint(floor_ID, -1, -1, -1, 
                                              p.JOINT_FIXED, 
@@ -96,7 +103,8 @@ def _build_gate(center, orientation):
                                              [0, 0, 0], 
                                              floor_center,
                                              parentFrameOrientation=[0, 0, 0, 1],
-                                             childFrameOrientation=orientation)
+                                             childFrameOrientation=orientation,
+                                             physicsClientId=client)
 
     return [piller_1_constraint, piller_2_constraint, roof_constraint, floor_constraint]
 
@@ -135,7 +143,7 @@ if __name__=='__main__':
 
         if center[2] < gate_width/2: center[2] = gate_width/2
 
-        obstacle_ID_list =_build_gate(obstaclesCenterPosition[i], p.getQuaternionFromEuler(obstaclesOrientation[i]))
+        obstacle_ID_list =_build_gate(obstaclesCenterPosition[i], p.getQuaternionFromEuler(obstaclesOrientation[i]), client)
 
         obstacleIDs += obstacle_ID_list
 
