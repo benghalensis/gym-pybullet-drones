@@ -8,6 +8,7 @@ from scipy.spatial.transform import Rotation as R
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
 from gym_pybullet_drones.envs.single_agent_rl.BaseSingleAgentAviary import ActionType, ObservationType, BaseSingleAgentAviary
 from reward_function import final_reward
+from add_track import _build_gate
 from gym import spaces
 
 class RacingDroneAviary(BaseSingleAgentAviary):
@@ -116,15 +117,11 @@ class RacingDroneAviary(BaseSingleAgentAviary):
             if center[2] < self.gate_width / 2:
                 center[2] = self.gate_width / 2
 
-            obstacleID = p.loadURDF(pkg_resources.resource_filename('gym_pybullet_drones', "assets/gates.urdf"),
-                                    center,
-                                    p.getQuaternionFromEuler(self.obstaclesOrientation[i]),
-                                    useFixedBase=1,
-                                    physicsClientId=self.CLIENT
-                                    )
-            self.obstacleIDs.append(obstacleID)
+            obstacle_ID_list =_build_gate(self.obstaclesCenterPosition[i], p.getQuaternionFromEuler(self.obstaclesOrientation[i]))
 
-    def _getGatesStateVector(self, nth_drone, gateIDs):
+            self.obstacleIDs += obstacle_ID_list
+
+    def _getGatesStateVector(self, nth_drone):
         """Returns the state vector of the n-th drone.
 
         Parameters
@@ -142,18 +139,19 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         drone_center = drone_state[0:3]
         drone_rotation_matrix = R.from_quat(drone_state[3:7]).as_matrix()
 
-        # Get the gate pose
-        currentGateID = gateIDs[0]
-        nextGateID = gateIDs[1]
-       
-        currentGatePos, currentGateOri = p.getBasePositionAndOrientation(bodyUniqueId=currentGateID)
-        current_gate_rotation_matrix = R.from_quat(currentGateOri).as_matrix()
-        if nextGateID == -999:
+        current_gate_index = self.current_obstable_index
+        next_gate_index = self.current_obstable_index + 1
+        currentGatePos = self.obstaclesCenterPosition[current_gate_index]
+        currentGateOri = self.obstaclesOrientation[current_gate_index]
+        current_gate_rotation_matrix = R.from_euler('xyz', currentGateOri).as_matrix()
+
+        if next_gate_index >= len(self.obstaclesCenterPosition):
             next_gate_rotation_matrix = current_gate_rotation_matrix
             nextGatePos = np.array(currentGatePos) + (current_gate_rotation_matrix @ np.array([[0], [1], [0]])).flatten()
         else:
-            nextGatePos, nextGateOri = p.getBasePositionAndOrientation(bodyUniqueId=nextGateID)
-            next_gate_rotation_matrix = R.from_quat(nextGateOri).as_matrix()
+            nextGatePos = self.obstaclesCenterPosition[next_gate_index]
+            nextGateOri = self.obstaclesOrientation[next_gate_index]
+            next_gate_rotation_matrix = R.from_euler('xyz', nextGateOri).as_matrix()
 
         # consider there is a vector p from plane coordinate system to gate center,
         vec_p = np.array(currentGatePos) - np.array(drone_center)
@@ -216,13 +214,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         rotation_matrix = R.from_quat(self.quat[nth_drone, :]).as_matrix()
         quad_state = np.hstack((self.vel[nth_drone, :], self.acc[nth_drone, :], rotation_matrix.flatten(), self.ang_v[nth_drone, :]))
 
-        # Find the current gate and next gate
-        if self.current_obstable_index + 1 < len(self.obstacleIDs):
-            gateIDs = [self.obstacleIDs[self.current_obstable_index], self.obstacleIDs[self.current_obstable_index + 1]]
-        else:
-            gateIDs = [self.obstacleIDs[self.current_obstable_index], -999]
-
-        gate_state = self._getGatesStateVector(nth_drone, gateIDs)
+        gate_state = self._getGatesStateVector(nth_drone)
 
         full_state = np.hstack((quad_state, gate_state))
 
@@ -278,13 +270,10 @@ class RacingDroneAviary(BaseSingleAgentAviary):
             prev_gate_center = self.spawn_position
             prev_gate_rotation = self.spawn_orientation
         else:
-            prev_gate_id = self.obstacleIDs[self.current_obstable_index-1]
             prev_gate_center = np.array(self.obstaclesCenterPosition[self.current_obstable_index-1])  # prev_gate_center centre
             prev_gate_rotation = R.from_euler('xyz', self.obstaclesOrientation[self.current_obstable_index-1]).as_matrix()
-        
-        current_gate_id = self.obstacleIDs[self.current_obstable_index]
+
         print("self.current_obstable_index:",self.current_obstable_index)
-        print("current_gate_id:",current_gate_id)
         current_gate_center = np.array(self.obstaclesCenterPosition[self.current_obstable_index])  # current_gate_center centre
         print("current_gate_center:", current_gate_center)
         current_gate_rotation = R.from_euler('xyz', self.obstaclesOrientation[self.current_obstable_index]).as_matrix()
