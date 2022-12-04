@@ -242,16 +242,16 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         if np.dot(plane_normal, pos) + d > 0:
             self.current_obstable_index += 1
 
-        if self.current_obstable_index == len(self.obstacleIDs):
+        if self.current_obstable_index == len(self.obstaclesCenterPosition):
             self.circuit_complete = True
 
         contact_information = p.getContactPoints(physicsClientId=self.CLIENT)
         if contact_information:
             body_ids = contact_information[0][1:3]
             if any(item in self.obstacleIDs for item in body_ids):
-                self.crash_location = (np.array(contact_information[0][5]) + np.array(contact_information[0][6]))/2
                 self.crashed_into_gate = True
             self.crashed = True
+            self.crash_location = (np.array(contact_information[0][5]) + np.array(contact_information[0][6]))/2
 
     def _computeReward(self):
         """Computes the current reward value.
@@ -291,7 +291,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         a = 0.1  # hyperparameter that trades off between progress maximization and risk minimization
         b = -0.0  # weight for penalty body rate
 
-        reward = final_reward(p, p_prev, prev_gate_center, current_gate_center, prev_gate_rotation, current_gate_rotation, a, b, dmax, wt, wg, crashed=self.crashed_into_gate, crash_location=self.crash_location)
+        reward = final_reward(p, p_prev, prev_gate_center, current_gate_center, prev_gate_rotation, current_gate_rotation, a, b, dmax, wt, wg, crashed=self.crashed, crash_location=self.crash_location)
         print("reward:", reward)
         return reward
 
