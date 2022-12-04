@@ -95,6 +95,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         self.obstacleIDs = []
         self.current_obstable_index = 0
         self.circuit_complete = False
+        self.crash_location = np.zeros(3)
         self.crashed = False
         self.crashed_into_gate = False
         super()._housekeeping()
@@ -246,8 +247,9 @@ class RacingDroneAviary(BaseSingleAgentAviary):
 
         contact_information = p.getContactPoints(physicsClientId=self.CLIENT)
         if contact_information:
-            body_ids = contact_information[1:3]
+            body_ids = contact_information[0][1:3]
             if any(item in self.obstacleIDs for item in body_ids):
+                self.crash_location = (np.array(contact_information[0][5]) + np.array(contact_information[0][6]))/2
                 self.crashed_into_gate = True
             self.crashed = True
 
@@ -289,7 +291,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         a = 0.1  # hyperparameter that trades off between progress maximization and risk minimization
         b = -0.0  # weight for penalty body rate
 
-        reward = final_reward(p, p_prev, prev_gate_center, current_gate_center, prev_gate_rotation, current_gate_rotation, a, b, dmax, wt, wg, crashed=self.crashed_into_gate)
+        reward = final_reward(p, p_prev, prev_gate_center, current_gate_center, prev_gate_rotation, current_gate_rotation, a, b, dmax, wt, wg, crashed=self.crashed_into_gate, crash_location=self.crash_location)
         print("reward:", reward)
         return reward
 

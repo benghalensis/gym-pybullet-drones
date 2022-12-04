@@ -48,7 +48,7 @@ def safety_reward(p, g, gm, dmax, wg):
     return -f**2 * (1 - np.exp(-0.5 * dn(p, g, gm)**2 / v))
 
 
-def final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg, crashed, debug=False):
+def final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg, crashed, crash_location, debug=False):
     '''
     Final Reward
     p_crash position of crash
@@ -64,8 +64,9 @@ def final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg, crashed, debug
     reward = progress_reward(p, p_prev, g1, g2) + a * safety_reward(p, g2, gm2, dmax, wg) + b * wt_mag
     if crashed:
         dg = np.linalg.norm(p - g2)
-        rt = -min((dg / wg)**2, 20.0)
-        return reward + rt
+        terminal_reward = -min((dg / wg)**2, 20.0)
+        print("terminal_reward", terminal_reward)
+        return reward + terminal_reward
     else:
         return reward
 

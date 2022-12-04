@@ -106,7 +106,7 @@ def _build_gate(center, orientation, client):
                                              childFrameOrientation=orientation,
                                              physicsClientId=client)
 
-    return [piller_1_constraint, piller_2_constraint, roof_constraint, floor_constraint]
+    return [piller_1_ID, piller_2_ID, roof_ID, floor_ID]
 
 if __name__=='__main__':
     client = p.connect(p.GUI)
