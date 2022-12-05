@@ -43,11 +43,23 @@ from RacingDroneAviary import RacingDroneAviary
 from gym_pybullet_drones.utils.utils import sync, str2bool
 
 import shared_constants
-
+from gym.envs.registration import register
+register(
+  id='RacingDroneAviary-v0',
+  entry_point='RacingDroneAviary:RacingDroneAviary'
+)
 DEFAULT_GUI = True
 DEFAULT_PLOT = True
 DEFAULT_OUTPUT_FOLDER = 'results'
-DEFAULT_WT_FOLDER='./results/save-RacingDroneAviary-v0-ppo-kin-rpm-12.04.2022_17.51.10'
+DEFAULT_WT_FOLDER='./results/save-RacingDroneAviary-v0-ppo-kin-rpm-12.04.2022_17.04.18'
+
+
+obstaclesCenterPosition = [[0,1,0.625], [0,2,0.625], [0,3,0.625], [0,4,0.625], [0,5,0.625]]
+obstaclesOrientation = [[0,0,0], [0,0,0], [0,0,0], [0,0,0], [0,0,0]]
+obstaclesStd = 0.01
+gate_width = 1.25
+initial_xyzs = np.array([[0.0,0.0,1.0]])
+initial_xyzs_std = 0.2
 
 def run(exp=DEFAULT_WT_FOLDER, gui=DEFAULT_GUI, plot=DEFAULT_PLOT, output_folder=DEFAULT_OUTPUT_FOLDER):
     #### Load the model from file ##############################
@@ -82,11 +94,21 @@ def run(exp=DEFAULT_WT_FOLDER, gui=DEFAULT_GUI, plot=DEFAULT_PLOT, output_folder
     ACT = ACT.pop()
 
     #### Evaluate the model ####################################
-    eval_env = gym.make(env_name,
-                        aggregate_phy_steps=shared_constants.AGGR_PHY_STEPS,
-                        obs=OBS,
-                        act=ACT
-                        )
+    # eval_env = gym.make(env_name,
+    #                     aggregate_phy_steps=shared_constants.AGGR_PHY_STEPS,
+    #                     obs=OBS,
+    #                     act=ACT
+    #                     )
+    eval_env = gym.make('RacingDroneAviary-v0',
+                            aggregate_phy_steps=shared_constants.AGGR_PHY_STEPS,
+                            obs=OBS,
+                            act=ACT,
+                            initial_xyzs=initial_xyzs,
+                            initial_xyzs_std=initial_xyzs_std,
+                            obstaclesCenterPosition=obstaclesCenterPosition,
+                            obstaclesOrientation=obstaclesOrientation,
+                            obstaclesStd=obstaclesStd,
+                            gate_width=gate_width)
     mean_reward, std_reward = evaluate_policy(model,
                                               eval_env,
                                               n_eval_episodes=10
@@ -99,8 +121,13 @@ def run(exp=DEFAULT_WT_FOLDER, gui=DEFAULT_GUI, plot=DEFAULT_PLOT, output_folder
                         record=False,
                         aggregate_phy_steps=shared_constants.AGGR_PHY_STEPS,
                         obs=OBS,
-                        act=ACT
-                        )
+                        act=ACT,
+                        initial_xyzs=initial_xyzs,
+                        initial_xyzs_std=initial_xyzs_std,
+                        obstaclesCenterPosition=obstaclesCenterPosition,
+                        obstaclesOrientation=obstaclesOrientation,
+                        obstaclesStd=obstaclesStd,
+                        gate_width=gate_width)
     logger = Logger(logging_freq_hz=int(test_env.SIM_FREQ/test_env.AGGR_PHY_STEPS),
                     num_drones=1,
                     output_folder=output_folder
