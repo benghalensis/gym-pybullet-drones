@@ -19,6 +19,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
     def __init__(self,
                  drone_model: DroneModel = DroneModel.CF2X,
                  initial_xyzs=None,
+                 initial_xyzs_std: float = 0.0,
                  initial_rpys=None,
                  physics: Physics = Physics.PYB,
                  freq: int = 240,
@@ -70,6 +71,8 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         # [WARNING] - spawn_position and orientation
         self.spawn_position = np.zeros(3)
         self.spawn_orientation = np.eye(3)
+        self.initial_xyzs = initial_xyzs
+        self.initial_xyzs_std = initial_xyzs_std
 
         super().__init__(drone_model=drone_model,
                          initial_xyzs=initial_xyzs,
@@ -98,6 +101,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         self.crash_location = np.zeros(3)
         self.crashed = False
         self.crashed_into_gate = False
+        self.INIT_XYZS = np.random.normal(self.initial_xyzs, self.initial_xyzs_std)
         super()._housekeeping()
 
     ################################################################################
@@ -118,7 +122,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
             if center[2] < self.gate_width / 2:
                 center[2] = self.gate_width / 2
 
-            obstacle_ID_list =_build_gate(self.obstaclesCenterPosition[i], p.getQuaternionFromEuler(self.obstaclesOrientation[i]), client=self.CLIENT)
+            obstacle_ID_list =_build_gate(center, p.getQuaternionFromEuler(self.obstaclesOrientation[i]), client=self.CLIENT)
 
             self.obstacleIDs += obstacle_ID_list
 
@@ -287,8 +291,8 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         p_prev = self.prev_pos[0]  # previous position
         wg = self.gate_width  # side length of the rectangular gate
 
-        dmax = 1  # specifies a threshold on the distance to the gate center in order to activate the safety reward
-        a = 0.1  # hyperparameter that trades off between progress maximization and risk minimization
+        dmax = 2.5  # specifies a threshold on the distance to the gate center in order to activate the safety reward
+        a = 0.5  # hyperparameter that trades off between progress maximization and risk minimization
         b = -0.0  # weight for penalty body rate
 
         reward = final_reward(p, p_prev, prev_gate_center, current_gate_center, prev_gate_rotation, current_gate_rotation, a, b, dmax, wt, wg, crashed=self.crashed, crash_location=self.crash_location)
@@ -354,8 +358,8 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         MAX_XY = MAX_LIN_VEL_XY * self.EPISODE_LEN_SEC
         MAX_Z = MAX_LIN_VEL_Z * self.EPISODE_LEN_SEC
 
-        MAX_LIN_ACC_XY = 5
-        MAX_LIN_ACC_Z = 5
+        MAX_LIN_ACC_XY = 40
+        MAX_LIN_ACC_Z = 20
 
         MAX_PITCH_ROLL = np.pi  # Full range
 

@@ -78,15 +78,29 @@ if __name__ == "__main__":
     ang_vel = np.array([0.0, 0.0, 0.0])  # body rates
     debug = True
 
-    p = np.array([0.1, 1.0, 0.625])  # current position
-    p_prev = np.array([0, 0, 0.625])  # previous position
+    p = np.array([0.2, 2.5, 0.625])  # current position
+    p_prev = np.array([0, 2.4, 0.625])  # previous position
     wg = 0.75  # side length of the rectangular gate
+    crash_location = np.array([0, 4, 1])
 
     dmax = 2  # specifies a threshold on the distance to the gate center in order to activate the safety reward
-    a = 2  # hyperparameter that trades off between progress maximization and risk minimization
-    b = -0.5  # weight for penalty body rate
+    a = 0.5  # hyperparameter that trades off between progress maximization and risk minimization
+    b = -0.0  # weight for penalty body rate
 
     if debug:
         print('dp(p, g, gm):', dp(p, prev_gate_center, prev_gate_rotation))
         print('dn(p, g, gm):', dn(p, prev_gate_center, prev_gate_rotation))
-        print(final_reward(p, p_prev, prev_gate_center, current_gate_center, prev_gate_rotation, current_gate_rotation, a, b, dmax, ang_vel, wg, debug=debug))
+        print(final_reward(p=p, 
+                           p_prev=p_prev, 
+                           g1=prev_gate_center, 
+                           g2=current_gate_center, 
+                           gm1=prev_gate_rotation, 
+                           gm2=current_gate_rotation, 
+                           a=a, 
+                           b=b, 
+                           dmax=dmax, 
+                           wt=ang_vel, 
+                           wg=wg, 
+                           crashed=False, 
+                           crash_location=crash_location, 
+                           debug=debug))

@@ -4,6 +4,7 @@ import shared_constants
 import torch
 from datetime import datetime
 import gym
+import numpy as np
 from gym.envs.registration import register
 
 from stable_baselines3.common.env_util import make_vec_env
@@ -57,14 +58,18 @@ def run(
     if not os.path.exists(filename):
         os.makedirs(filename+'/')
 
-    obstaclesCenterPosition = [[0,1,0.625], [0,2,0.625], [0,3,0.625], [0,4,0.625], [0,5,0.625]]
+    obstaclesCenterPosition = [[0,1.5,1], [0,3,1], [0,4.5,1], [0,6,1], [0,7.5,1]]
     obstaclesOrientation = [[0,0,0], [0,0,0], [0,0,0], [0,0,0], [0,0,0]]
-    obstaclesStd = 0.01
-    gate_width = 0.75
+    obstaclesStd = 0.25
+    gate_width = 1.25
+    initial_xyzs = np.array([[0.0,0.0,1.0]])
+    initial_xyzs_std = 0.2
     
     sa_env_kwargs = dict(aggregate_phy_steps=shared_constants.AGGR_PHY_STEPS, 
                          obs=obs, 
                          act=act, 
+                         initial_xyzs=initial_xyzs,
+                         initial_xyzs_std=initial_xyzs_std,
                          obstaclesCenterPosition=obstaclesCenterPosition,
                          obstaclesOrientation=obstaclesOrientation,
                          obstaclesStd=obstaclesStd,
@@ -80,6 +85,8 @@ def run(
                             aggregate_phy_steps=shared_constants.AGGR_PHY_STEPS,
                             obs=obs,
                             act=act,
+                            initial_xyzs=initial_xyzs,
+                            initial_xyzs_std=initial_xyzs_std,
                             obstaclesCenterPosition=obstaclesCenterPosition,
                             obstaclesOrientation=obstaclesOrientation,
                             obstaclesStd=obstaclesStd,
