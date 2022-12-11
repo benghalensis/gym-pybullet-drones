@@ -51,7 +51,7 @@ register(
 DEFAULT_GUI = True
 DEFAULT_PLOT = True
 DEFAULT_OUTPUT_FOLDER = 'results'
-DEFAULT_WT_FOLDER='./results/save-RacingDroneAviary-v0-ppo-kin-rpm-12.04.2022_17.04.18'
+DEFAULT_WT_FOLDER='./results/save-RacingDroneAviary-v0-ppo-kin-rpm-12.04.2022_23.08.08'
 
 
 obstaclesCenterPosition = [[0,1,0.625], [0,2,0.625], [0,3,0.625], [0,4,0.625], [0,5,0.625]]
