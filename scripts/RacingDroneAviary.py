@@ -79,7 +79,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         self.all_acc=[]
         self.all_ang_v=[]
         self.all_gate_obs=[]
-        self.computeZScore=True
+        self.computeZScore=False
 
         super().__init__(drone_model=drone_model,
                          initial_xyzs=initial_xyzs,
@@ -426,33 +426,33 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         # normalized_q_phi = state[24] / MAX_PITCH_ROLL
         # normalized_a_2 = state[25] / MAX_PITCH_ROLL
 
-        vel_mean =np.array([-0.59528299, -0.31936955, -0.57806354]) 
-        vel_std=np.array([2.89366092, 2.94703294, 1.46182543])
-        acc_mean=np.array([ 26.15621963,  16.58780964, 641.58667106])	  
-        acc_std=np.array([176.59812371, 142.3743633,  333.49905294])
-        rpy_mean=[0.12956831, 0.1187216,  0.37795085] 
-        rpy_std=[2.34609521, 0.59167492, 1.63865029]
-        ang_vel_mean=np.array( [  6.95537508, -10.37642969,  -0.42744305]) 
-        ang_vel_std=np.array([45.266756,   45.91917897, 11.61921128])
+        # vel_mean =np.array([-0.59528299, -0.31936955, -0.57806354]) 
+        # vel_std=np.array([2.89366092, 2.94703294, 1.46182543])
+        # acc_mean=np.array([ 26.15621963,  16.58780964, 641.58667106])	  
+        # acc_std=np.array([176.59812371, 142.3743633,  333.49905294])
+        # rpy_mean=[0.12956831, 0.1187216,  0.37795085] 
+        # rpy_std=[2.34609521, 0.59167492, 1.63865029]
+        # ang_vel_mean=np.array( [  6.95537508, -10.37642969,  -0.42744305]) 
+        # ang_vel_std=np.array([45.266756,   45.91917897, 11.61921128])
 
-        gate_obs_mean= np.array([1.8, 0.39876678, 1.67266936, 0.25809954, 1.5,        0.,
-        1.57079633, 0.]) 
-        gate_obs_std=np.array([6.11925047e-01, 3.41099683e-01, 5.14767735e-01, 3.52430447e-01,
-        self.obstaclesStd,self.obstaclesStd , 4.77395901e-14,self.obstaclesStd ])
+        vel_mean =np.array([ 0.56788704,  1.69282147, -1.24415933]) 
+        vel_std=np.array([2.29446675, 2.11655072, 1.51620822])
+        acc_mean=np.array([ 11.96009264, -176.39354225,  652.83030095])	  
+        acc_std=np.array([182.24033002, 221.61283258, 398.40376735])
+        rpy_mean=[0.18491563, -0.11516139, -0.37774102] 
+        rpy_std=[2.50923123, 0.51063424, 1.36510486]
+        ang_vel_mean=np.array( [-9.28351828,  9.12965564,  2.18803784]) 
+        ang_vel_std=np.array([47.02399713, 43.5874468,  15.63380269])
+
+
+        gate_obs_mean= np.array([1.43250485, 0.49788855, 1.33366795, 0.36415743]) 
+        gate_obs_std=np.array([4.37988081e-01, 3.95491805e-01, 5.89980432e-01, 3.34656134e-01])
 
         # gate_center_mean=np.array([0. ,        1.50585938, 1.        ]) 
         # gate_center_std=np.array([0.,         0.09356672, 0.,        ])
         # gate_rotation_mean=np.ndarray([[1., 0., 0.],[0., 1., 0.],[0., 0.,1.]]) 
         # gate_rotation_std=np.ndarray([[0., 0., 0.],[0., 0., 0.],[0., 0., 0.]])
 
-        normalized_p_r = clipped_p_r / MAX_DIST_TO_GATE
-        normalized_p_theta = state[19] / MAX_PITCH_ROLL
-        normalized_p_phi = state[20] / MAX_PITCH_ROLL
-        normalized_a_1 = state[21] / MAX_PITCH_ROLL
-        normalized_q_r = clipped_q_r / MAX_DIST_TO_GATE
-        normalized_q_theta = state[23] / MAX_PITCH_ROLL
-        normalized_q_phi = state[24] / MAX_PITCH_ROLL
-        normalized_a_2 = state[25] / MAX_PITCH_ROLL
 
 
         normalized_vel = (state[0:3]-vel_mean)/vel_std
@@ -461,13 +461,14 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         rpy_std=R.from_euler('xyz', rpy_std).as_matrix().flatten()
         normalized_rpy=(state[6:15]-rpy_mean)/rpy_std
         normalized_ang_vel=(state[15:18]-ang_vel_mean)/ang_vel_std
-        normalized_gate_obs=(state[18:26]-gate_obs_mean)/gate_obs_std
+        normalized_gate_obs=(state[18:22]-gate_obs_mean)/gate_obs_std
 
         norm_and_clipped = np.hstack([normalized_vel,
                                       normalized_acc,
                                       normalized_rpy,
                                       normalized_ang_vel,
                                       normalized_gate_obs,
+                                      state[22:26]
                                       ]).reshape(26,)
 
         return norm_and_clipped
