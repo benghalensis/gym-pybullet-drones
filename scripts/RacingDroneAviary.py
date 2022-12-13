@@ -31,6 +31,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
                  obstaclesCenterPosition=None,
                  obstaclesOrientation=None,
                  obstaclesStd: float = 0.001,
+                 obstacleOrientationStd: float = 0.001,
                  gate_width: float = 1.25,
                  ):
         """Initialization of a single agent RL environment.
@@ -67,10 +68,9 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         self.obstaclesCenterPosition = obstaclesCenterPosition
         self.obstaclesOrientation = obstaclesOrientation
         self.obstaclesStd = obstaclesStd
+        self.obstacleOrientationStd = obstacleOrientationStd
         self.gate_width = gate_width
         # [WARNING] - spawn_position and orientation
-        self.spawn_position = np.zeros(3)
-        self.spawn_orientation = np.eye(3)
         self.initial_xyzs = initial_xyzs
         self.initial_xyzs_std = initial_xyzs_std
         # use these value to find mean and std deviation from 1000 rollouts
@@ -126,10 +126,14 @@ class RacingDroneAviary(BaseSingleAgentAviary):
                       random.gauss(self.obstaclesCenterPosition[i][1], self.obstaclesStd),
                       random.gauss(self.obstaclesCenterPosition[i][2], self.obstaclesStd)]
 
+            orientation = [random.gauss(self.obstaclesOrientation[i][0], self.obstacleOrientationStd),
+                           random.gauss(self.obstaclesOrientation[i][1], self.obstacleOrientationStd),
+                           random.gauss(self.obstaclesOrientation[i][2], self.obstacleOrientationStd)]
+            
             if center[2] < self.gate_width / 2:
                 center[2] = self.gate_width / 2
 
-            obstacle_ID_list =_build_gate(center, p.getQuaternionFromEuler(self.obstaclesOrientation[i]), client=self.CLIENT)
+            obstacle_ID_list =_build_gate(center, p.getQuaternionFromEuler(orientation), client=self.CLIENT)
 
             self.obstacleIDs += obstacle_ID_list
 
@@ -238,7 +242,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         ############################################################
         if self.computeZScore:
             return full_state
-        return self._clipAndNormalizeState(full_state) 
+        return self.zNormalizeState(full_state)
 
     ################################################################################
 
@@ -281,8 +285,8 @@ class RacingDroneAviary(BaseSingleAgentAviary):
             return 0.0
 
         if self.current_obstable_index-1 < 0:
-            prev_gate_center = self.spawn_position
-            prev_gate_rotation = self.spawn_orientation
+            prev_gate_center = self.INIT_XYZS[0]
+            prev_gate_rotation = self.INIT_RPYS[0]
         else:
             prev_gate_center = np.array(self.obstaclesCenterPosition[self.current_obstable_index-1])  # prev_gate_center centre
             prev_gate_rotation = R.from_euler('xyz', self.obstaclesOrientation[self.current_obstable_index-1]).as_matrix()
@@ -313,7 +317,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         wg = self.gate_width  # side length of the rectangular gate
 
         dmax = 2.5  # specifies a threshold on the distance to the gate center in order to activate the safety reward
-        a = 0.5  # hyperparameter that trades off between progress maximization and risk minimization
+        a = 0.15  # hyperparameter that trades off between progress maximization and risk minimization
         b = -0.0  # weight for penalty body rate
 
         reward = final_reward(p, p_prev, prev_gate_center, current_gate_center, prev_gate_rotation, current_gate_rotation, a, b, dmax, wt, wg, crashed=self.crashed, crash_location=self.crash_location)
@@ -357,10 +361,8 @@ class RacingDroneAviary(BaseSingleAgentAviary):
 
     ################################################################################
 
-    def _clipAndNormalizeState(self,
-                               state
-                               ):
-        """Normalizes a drone's state to the [-1,1] range.
+    def zNormalizeState(self, state):
+        """Z-Normalizes a drone's state.
 
         Parameters
         ----------
@@ -373,102 +375,150 @@ class RacingDroneAviary(BaseSingleAgentAviary):
             (20,)-shaped array of floats containing the normalized state of a single drone.
 
         """
-        # MAX_LIN_VEL_XY = 3
-        # MAX_LIN_VEL_Z = 1
+        STD_LIN_ACC_XY = 40
+        STD_LIN_ACC_Z = 20
 
-        # MAX_XY = MAX_LIN_VEL_XY * self.EPISODE_LEN_SEC
-        # MAX_Z = MAX_LIN_VEL_Z * self.EPISODE_LEN_SEC
+        STD_ANG_VEL_XY = 5
+        STD_ANG_VEL_Z = 2
 
-        # MAX_LIN_ACC_XY = 40
-        # MAX_LIN_ACC_Z = 20
+        STD_ANGLE = np.pi
 
-        MAX_PITCH_ROLL = np.pi  # Full range
-
-        MAX_DIST_TO_GATE = 5
-
-        # # v_x   v_y
-        # clipped_vel_xy = np.clip(state[0:2], -MAX_LIN_VEL_XY, MAX_LIN_VEL_XY)
-        # # v_z
-        # clipped_vel_z = np.clip(state[2], -MAX_LIN_VEL_Z, MAX_LIN_VEL_Z)
-        # # a_x   a_y
-        # clipped_acc_xy = np.clip(state[3:5], -MAX_LIN_ACC_XY, MAX_LIN_ACC_XY)
-        # # a_z
-        # clipped_acc_z = np.clip(state[5], -MAX_LIN_ACC_Z, MAX_LIN_ACC_Z)
-        # # w_1   w_2   w_3
-
-        # # p_r  p_th  p_phi a_1   q_r   q_th  q_phi a_2
-        clipped_p_r = np.clip(state[18], 0, MAX_DIST_TO_GATE)
-        clipped_q_r = np.clip(state[22], 0, MAX_DIST_TO_GATE)
-
-
-        # if self.GUI:
-        #     self._clipAndNormalizeStateWarning(state,
-        #                                        clipped_vel_xy,
-        #                                        clipped_vel_z,
-        #                                        clipped_acc_xy,
-        #                                        clipped_acc_z,
-        #                                        clipped_p_r,
-        #                                        clipped_q_r
-        #                                        )
-
-        # normalized_vel_xy = clipped_vel_xy / MAX_LIN_VEL_XY
-        # normalized_vel_z = clipped_vel_z / MAX_LIN_VEL_XY
-        # normalized_acc_xy = clipped_acc_xy / MAX_LIN_ACC_XY
-        # normalized_acc_z = clipped_acc_z / MAX_LIN_ACC_Z
-        # # I don't know why this is done
-        # normalized_ang_vel = state[15:18] / np.linalg.norm(state[13:16]) if np.linalg.norm(state[13:16]) != 0 else state[13:16]
-        # normalized_p_r = clipped_p_r / MAX_DIST_TO_GATE
-        # normalized_p_theta = state[19] / MAX_PITCH_ROLL
-        # normalized_p_phi = state[20] / MAX_PITCH_ROLL
-        # normalized_a_1 = state[21] / MAX_PITCH_ROLL
-        # normalized_q_r = clipped_q_r / MAX_DIST_TO_GATE
-        # normalized_q_theta = state[23] / MAX_PITCH_ROLL
-        # normalized_q_phi = state[24] / MAX_PITCH_ROLL
-        # normalized_a_2 = state[25] / MAX_PITCH_ROLL
-
-        # vel_mean =np.array([-0.59528299, -0.31936955, -0.57806354]) 
-        # vel_std=np.array([2.89366092, 2.94703294, 1.46182543])
-        # acc_mean=np.array([ 26.15621963,  16.58780964, 641.58667106])	  
-        # acc_std=np.array([176.59812371, 142.3743633,  333.49905294])
-        # rpy_mean=[0.12956831, 0.1187216,  0.37795085] 
-        # rpy_std=[2.34609521, 0.59167492, 1.63865029]
-        # ang_vel_mean=np.array( [  6.95537508, -10.37642969,  -0.42744305]) 
-        # ang_vel_std=np.array([45.266756,   45.91917897, 11.61921128])
-
-        vel_mean =np.array([ 0.56788704,  1.69282147, -1.24415933]) 
+        vel_mean =np.array([0.0, 0.0, 0.0])
         vel_std=np.array([2.29446675, 2.11655072, 1.51620822])
-        acc_mean=np.array([ 11.96009264, -176.39354225,  652.83030095])	  
-        acc_std=np.array([182.24033002, 221.61283258, 398.40376735])
-        rpy_mean=[0.18491563, -0.11516139, -0.37774102] 
-        rpy_std=[2.50923123, 0.51063424, 1.36510486]
-        ang_vel_mean=np.array( [-9.28351828,  9.12965564,  2.18803784]) 
-        ang_vel_std=np.array([47.02399713, 43.5874468,  15.63380269])
+        acc_mean=np.array([0.0, 0.0, 0.0])
+        acc_std=np.array([STD_LIN_ACC_XY, STD_LIN_ACC_XY, STD_LIN_ACC_Z])
+        # rpy_mean=[0.18491563, -0.11516139, -0.37774102] 
+        # rpy_std=[2.50923123, 0.51063424, 1.36510486]
+        ang_vel_mean=np.array([0.0, 0.0, 0.0])
+        ang_vel_std=np.array([STD_ANG_VEL_XY, STD_ANG_VEL_XY, STD_ANG_VEL_Z])
 
-
-        gate_obs_mean= np.array([1.43250485, 0.49788855, 1.33366795, 0.36415743]) 
+        gate_obs_mean= np.array([2.0, 0.49788855, 1.33366795, 0.36415743]) 
         gate_obs_std=np.array([4.37988081e-01, 3.95491805e-01, 5.89980432e-01, 3.34656134e-01])
+
+        pr_mean = 2.0
+        qr_mean = 2.0
+        pr_std = 2.0
+        qr_std = 2.0
 
         # gate_center_mean=np.array([0. ,        1.50585938, 1.        ]) 
         # gate_center_std=np.array([0.,         0.09356672, 0.,        ])
         # gate_rotation_mean=np.ndarray([[1., 0., 0.],[0., 1., 0.],[0., 0.,1.]]) 
         # gate_rotation_std=np.ndarray([[0., 0., 0.],[0., 0., 0.],[0., 0., 0.]])
 
-
-
         normalized_vel = (state[0:3]-vel_mean)/vel_std
         normalized_acc = (state[3:6]-acc_mean)/acc_std
-        rpy_mean = R.from_euler('xyz', rpy_mean).as_matrix().flatten()
-        rpy_std=R.from_euler('xyz', rpy_std).as_matrix().flatten()
-        normalized_rpy=(state[6:15]-rpy_mean)/rpy_std
+        # rpy_mean = R.from_euler('xyz', rpy_mean).as_matrix().flatten()
+        # rpy_std=R.from_euler('xyz', rpy_std).as_matrix().flatten()
+        # normalized_rpy=(state[6:15]-rpy_mean)/rpy_std
         normalized_ang_vel=(state[15:18]-ang_vel_mean)/ang_vel_std
-        normalized_gate_obs=(state[18:22]-gate_obs_mean)/gate_obs_std
+        # normalized_gate_obs=(state[18:22]-gate_obs_mean)/gate_obs_std
 
-        norm_and_clipped = np.hstack([normalized_vel,
+        normalized_p_r = (state[18] - pr_mean) / pr_std
+        normalized_p_theta = state[19] / STD_ANGLE
+        normalized_p_phi = state[20] / STD_ANGLE
+        normalized_a_1 = state[21] / STD_ANGLE
+        normalized_q_r = (state[22] - qr_mean) / qr_std
+        normalized_q_theta = state[23] / STD_ANGLE
+        normalized_q_phi = state[24] / STD_ANGLE
+        normalized_a_2 = state[25] / STD_ANGLE
+
+        normalized_state = np.hstack([normalized_vel,
                                       normalized_acc,
-                                      normalized_rpy,
+                                      state[6:15],
                                       normalized_ang_vel,
-                                      normalized_gate_obs,
-                                      state[22:26]
+                                      normalized_p_r,
+                                      normalized_p_theta,
+                                      normalized_p_phi,
+                                      normalized_a_1,
+                                      normalized_q_r,
+                                      normalized_q_theta,
+                                      normalized_q_phi,
+                                      normalized_a_2,
+                                      ]).reshape(26,)
+
+        return normalized_state
+
+    ################################################################################
+
+    def _clipAndNormalizeState(self,
+                               state
+                               ):
+        """Normalizes a drone's state to the [-1,1] range.
+        Parameters
+        ----------
+        state : ndarray
+            (20,)-shaped array of floats containing the non-normalized state of a single drone.
+        Returns
+        -------
+        ndarray
+            (20,)-shaped array of floats containing the normalized state of a single drone.
+        """
+        MAX_LIN_VEL_XY = 3
+        MAX_LIN_VEL_Z = 1
+
+        MAX_XY = MAX_LIN_VEL_XY * self.EPISODE_LEN_SEC
+        MAX_Z = MAX_LIN_VEL_Z * self.EPISODE_LEN_SEC
+
+        MAX_LIN_ACC_XY = 40
+        MAX_LIN_ACC_Z = 20
+
+        MAX_PITCH_ROLL = np.pi  # Full range
+
+        MAX_DIST_TO_GATE = 5
+
+        # v_x   v_y
+        clipped_vel_xy = np.clip(state[0:2], -MAX_LIN_VEL_XY, MAX_LIN_VEL_XY)
+        # v_z
+        clipped_vel_z = np.clip(state[2], -MAX_LIN_VEL_Z, MAX_LIN_VEL_Z)
+        # a_x   a_y
+        clipped_acc_xy = np.clip(state[3:5], -MAX_LIN_ACC_XY, MAX_LIN_ACC_XY)
+        # a_z
+        clipped_acc_z = np.clip(state[5], -MAX_LIN_ACC_Z, MAX_LIN_ACC_Z)
+        # w_1   w_2   w_3
+
+        # p_r  p_th  p_phi a_1   q_r   q_th  q_phi a_2
+        clipped_p_r = np.clip(state[18], 0, MAX_DIST_TO_GATE)
+        clipped_q_r = np.clip(state[22], 0, MAX_DIST_TO_GATE)
+
+        if self.GUI:
+            self._clipAndNormalizeStateWarning(state,
+                                               clipped_vel_xy,
+                                               clipped_vel_z,
+                                               clipped_acc_xy,
+                                               clipped_acc_z,
+                                               clipped_p_r,
+                                               clipped_q_r
+                                               )
+
+        normalized_vel_xy = clipped_vel_xy / MAX_LIN_VEL_XY
+        normalized_vel_z = clipped_vel_z / MAX_LIN_VEL_XY
+        normalized_acc_xy = clipped_acc_xy / MAX_LIN_ACC_XY
+        normalized_acc_z = clipped_acc_z / MAX_LIN_ACC_Z
+        # I don't know why this is done
+        normalized_ang_vel = state[15:18] / np.linalg.norm(state[13:16]) if np.linalg.norm(state[13:16]) != 0 else state[13:16]
+        normalized_p_r = clipped_p_r / MAX_DIST_TO_GATE
+        normalized_p_theta = state[19] / MAX_PITCH_ROLL
+        normalized_p_phi = state[20] / MAX_PITCH_ROLL
+        normalized_a_1 = state[21] / MAX_PITCH_ROLL
+        normalized_q_r = clipped_q_r / MAX_DIST_TO_GATE
+        normalized_q_theta = state[23] / MAX_PITCH_ROLL
+        normalized_q_phi = state[24] / MAX_PITCH_ROLL
+        normalized_a_2 = state[25] / MAX_PITCH_ROLL
+
+        norm_and_clipped = np.hstack([normalized_vel_xy,
+                                      normalized_vel_z,
+                                      normalized_acc_xy,
+                                      normalized_acc_z,
+                                      state[7:16],
+                                      normalized_ang_vel,
+                                      normalized_p_r,
+                                      normalized_p_theta,
+                                      normalized_p_phi,
+                                      normalized_a_1,
+                                      normalized_q_r,
+                                      normalized_q_theta,
+                                      normalized_q_phi,
+                                      normalized_a_2,
                                       ]).reshape(26,)
 
         return norm_and_clipped

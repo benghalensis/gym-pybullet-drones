@@ -5,11 +5,13 @@ import torch
 from datetime import datetime
 import gym
 import numpy as np
+import matplotlib.pyplot as plt
 from gym.envs.registration import register
 
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.policies import ActorCriticPolicy as a2cppoMlpPolicy
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnRewardThreshold
+from stable_baselines3.common.logger import Figure
 from stable_baselines3 import PPO
 
 from RacingDroneAviary import RacingDroneAviary
@@ -20,16 +22,47 @@ register(
   entry_point='RacingDroneAviary:RacingDroneAviary'
 )
 
-EPISODE_REWARD_THRESHOLD = 10
+EPISODE_REWARD_THRESHOLD = 1000
 DEFAULT_ENV = 'RacingDroneAviary-v0'
 DEFAULT_ALGO = 'ppo'
 DEFAULT_OBS = ObservationType('kin')
 DEFAULT_ACT = ActionType('rpm')
 DEFAULT_CPU = 1
-DEFAULT_STEPS = 100000
+DEFAULT_STEPS = 1000000
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_LOAD = False
 DEFAULT_LOAD_PATH = None
+
+class EvalCallbackMod(EvalCallback):
+    def __init__(self, 
+                 eval_env, 
+                 callback_on_new_best, 
+                 verbose, 
+                 best_model_save_path,
+                 log_path,
+                 eval_freq=int(2000/DEFAULT_CPU),
+                 deterministic=True,
+                 render=False):
+        
+        super().__init__(eval_env,
+                        callback_on_new_best=callback_on_new_best,
+                        verbose=verbose,
+                        best_model_save_path=best_model_save_path,
+                        log_path=log_path,
+                        eval_freq=eval_freq,
+                        deterministic=deterministic,
+                        render=render)
+        
+    def _on_step(self):
+        if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
+            # Plot values (here a random variable)
+            figure = plt.figure()
+            figure.add_subplot().plot(np.random.random(3))
+            # Close the figure after logging it
+            self.logger.record("trajectory/figure", Figure(figure, close=True), exclude=("stdout", "log", "json", "csv"))
+            plt.close()
+        super()._on_step()
+
 
 def run(
     env=DEFAULT_ENV,
@@ -45,6 +78,7 @@ def run(
 
     #### Load directory for model ########################################
     if load:
+        filename = load_exp
         print("load_exp:", load_exp)
         if os.path.isfile(load_exp+'/success_model.zip'):
             load_path = load_exp+'/success_model.zip'
@@ -52,18 +86,51 @@ def run(
             load_path = load_exp+'/best_model.zip'
         else:
             print("[ERROR]: no model under the specified path", load_exp)
+    else:
+        #### Save directory ########################################
+        filename = os.path.join(output_folder, 'save-'+env+'-'+algo+'-'+obs.value+'-'+act.value+'-'+datetime.now().strftime("%m.%d.%Y_%H.%M.%S"))
+        if not os.path.exists(filename):
+            os.makedirs(filename+'/')
 
-    #### Save directory ########################################
-    filename = os.path.join(output_folder, 'save-'+env+'-'+algo+'-'+obs.value+'-'+act.value+'-'+datetime.now().strftime("%m.%d.%Y_%H.%M.%S"))
-    if not os.path.exists(filename):
-        os.makedirs(filename+'/')
+    # obstaclesCenterPosition = [[0,1.5,1], [0,3,1], [0,4.5,1], [0,6,1], [0,7.5,1]]
+    # obstaclesOrientation = [[0,0,0], [0,0,0], [0,0,0], [0,0,0], [0,0,0]]
+    # obstaclesStd = 0.25
+    # gate_width = 1.25
+    # initial_xyzs = np.array([[0.0,0.0,1.0]])
+    # initial_xyzs_std = 0.2
 
-    obstaclesCenterPosition = [[0,1.5,1], [0,3,1], [0,4.5,1], [0,6,1], [0,7.5,1]]
-    obstaclesOrientation = [[0,0,0], [0,0,0], [0,0,0], [0,0,0], [0,0,0]]
+    # Alpha Pilot track
+    obstaclesCenterPosition = [[20.0, 5.0, 3.0], # Obs-1
+                               [15.0, 40.0, 3.0], # Obs-2
+                               [ 5.0, 30.0, 3.0], # Obs-3
+                               [ 0.0, 5.0, 3.0], # Obs-4
+                               [-5.0,-10.0, 3.0], # Obs-5
+                               [-5.0,-25.0, 3.0], # Obs-6
+                               [ 0.0,-30.0, 3.0], # Obs-7
+                               [ 5.0,-25.0, 3.0], # Obs-8
+                               [ 5.0,-10.0, 3.0], # Obs-9
+                               [-10.0, 5.0, 3.0], # Obs-10
+                               [-10.0, 35.0, 3.0], # Obs-11
+                               ]
+
+    obstaclesOrientation = [[0.0, 0.0, 0.0], # Obs-1
+                            [0.0, 0.0, np.pi/4], # Obs-2
+                            [0.0, 0.0, np.pi], # Obs-3
+                            [0.0, 0.0, np.pi], # Obs-4
+                            [0.0, 0.0, np.pi], # Obs-5
+                            [0.0, 0.0, 5/4*np.pi], # Obs-6
+                            [0.0, 0.0, 3/2*np.pi], # Obs-7
+                            [0.0, 0.0, 7/4*np.pi], # Obs-8
+                            [0.0, 0.0, 0.0], # Obs-9
+                            [0.0, 0.0, 0.0], # Obs-10
+                            [0.0, 0.0, 0.0], # Obs-11
+                            ]
     obstaclesStd = 0.25
+    obstacleOrientationStd = 0.1
     gate_width = 1.25
-    initial_xyzs = np.array([[0.0,0.0,1.0]])
+    initial_xyzs = np.array([[20.0, -25.0, 3.0]])
     initial_xyzs_std = 0.2
+
     
     sa_env_kwargs = dict(aggregate_phy_steps=shared_constants.AGGR_PHY_STEPS, 
                          obs=obs, 
@@ -74,6 +141,7 @@ def run(
                          obstaclesOrientation=obstaclesOrientation,
                          obstaclesStd=obstaclesStd,
                          gate_width=gate_width,
+                         freq=120,
                          gui=False,
                          )
     train_env = make_vec_env(RacingDroneAviary,
@@ -91,6 +159,7 @@ def run(
                             obstaclesOrientation=obstaclesOrientation,
                             obstaclesStd=obstaclesStd,
                             gate_width=gate_width,
+                            freq=240,
                             gui=True)
     # eval_env_kwargs = dict(aggregate_phy_steps=shared_constants.AGGR_PHY_STEPS, 
     #                      obs=obs, 
@@ -117,7 +186,7 @@ def run(
     callback_on_best = StopTrainingOnRewardThreshold(reward_threshold=EPISODE_REWARD_THRESHOLD,
                                                      verbose=1
                                                      )
-    eval_callback = EvalCallback(eval_env,
+    eval_callback = EvalCallbackMod(eval_env,
                                  callback_on_new_best=callback_on_best,
                                  verbose=1,
                                  best_model_save_path=filename+'/',
@@ -135,12 +204,13 @@ def run(
                 )
 
     if load:
-        print("[INFO] Model {} loaded successfully:".format(load_path))
+        print("[INFO] Model {} loaded successfully:".format(filename))
         model = PPO.load(load_path, env=train_env)
 
     model.learn(total_timesteps=steps, #int(1e12),
                 callback=eval_callback,
                 log_interval=100,
+                reset_num_timesteps=False,
                 )
 
     #### Save the model ########################################

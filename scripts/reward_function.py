@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 def dp(p, g, gm):
     '''
@@ -7,7 +8,7 @@ def dp(p, g, gm):
     vector_pg = g - p
     gate_y_axis = gm[:, 1] # Should be a unit vector.
 
-    return np.linalg.norm(np.dot(vector_pg, gate_y_axis)) / np.linalg.norm(gate_y_axis)
+    return np.dot(vector_pg, gate_y_axis) / np.linalg.norm(gate_y_axis)
 
 
 def dn(p, g, gm):
@@ -71,14 +72,14 @@ def final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg, crashed, crash
         return reward
 
 if __name__ == "__main__":
-    prev_gate_center = np.array([0, 2, 0.625])  # gate1 centre (The gate it has cleared)
-    current_gate_center = np.array([0, 4, 0.625])  # gate2 centre (The gate in front of it)
-    prev_gate_rotation = np.identity(3)
-    current_gate_rotation = np.identity(3)
+    prev_gate_center = np.array([0, 0, 0.625])  # gate1 centre (The gate it has cleared)
+    current_gate_center = np.array([0, 20, 0.625])  # gate2 centre (The gate in front of it)
+    prev_gate_rotation = R.from_euler('xyz', np.array([0.0, 0.0, 0.001])).as_matrix()
+    current_gate_rotation = R.from_euler('xyz', np.array([0.0, 0.0, 0.001])).as_matrix()
     ang_vel = np.array([0.0, 0.0, 0.0])  # body rates
     debug = True
-
-    p = np.array([0.2, 2.5, 0.625])  # current position
+    
+    p = np.array([0.1, 10.0, 0.625])  # current position
     p_prev = np.array([0, 2.4, 0.625])  # previous position
     wg = 0.75  # side length of the rectangular gate
     crash_location = np.array([0, 4, 1])
@@ -88,8 +89,10 @@ if __name__ == "__main__":
     b = -0.0  # weight for penalty body rate
 
     if debug:
-        print('dp(p, g, gm):', dp(p, prev_gate_center, prev_gate_rotation))
-        print('dn(p, g, gm):', dn(p, prev_gate_center, prev_gate_rotation))
+        print('previous gate: dp(p, g, gm):', dp(p, prev_gate_center, prev_gate_rotation))
+        print('previous gate: dn(p, g, gm):', dn(p, prev_gate_center, prev_gate_rotation))
+        print('current gate: dp(p, g, gm):', dp(p, current_gate_center, current_gate_rotation))
+        print('current gate: dn(p, g, gm):', dn(p, current_gate_center, current_gate_rotation))
         print(final_reward(p=p, 
                            p_prev=p_prev, 
                            g1=prev_gate_center, 
