@@ -43,6 +43,8 @@ class EvalCallbackMod(EvalCallback):
                  eval_freq=int(2000/DEFAULT_CPU),
                  deterministic=True,
                  render=False):
+
+        self.drone_path = np.empty(shape=(0,3), dtype=np.float64)
         
         super().__init__(eval_env,
                         callback_on_new_best=callback_on_new_best,
@@ -56,11 +58,12 @@ class EvalCallbackMod(EvalCallback):
     def _on_step(self):
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
             # Plot values (here a random variable)
-            figure = plt.figure()
-            figure.add_subplot().plot(np.random.random(3))
+            drone_path = self.eval_env.envs[0].env.saved_drone_path
+            figure, ax = plt.subplots()
+            ax.plot(drone_path[:,0], drone_path[:,1])
+            ax.set_aspect('equal')
             # Close the figure after logging it
-            self.logger.record("trajectory/figure", Figure(figure, close=True), exclude=("stdout", "log", "json", "csv"))
-            plt.close()
+            self.logger.record("drone_trajectory", Figure(figure, close=True), exclude=("stdout", "log", "json", "csv"))
         super()._on_step()
 
 

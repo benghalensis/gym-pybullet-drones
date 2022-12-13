@@ -81,6 +81,8 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         self.all_gate_obs=[]
         self.computeZScore=False
 
+        self.saved_drone_path = np.empty(shape=(0,3), dtype=np.float64)
+
         super().__init__(drone_model=drone_model,
                          initial_xyzs=initial_xyzs,
                          initial_rpys=initial_rpys,
@@ -109,6 +111,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         self.crashed = False
         self.crashed_into_gate = False
         self.INIT_XYZS = np.random.normal(self.initial_xyzs, self.initial_xyzs_std)
+        self.drone_path = np.empty(shape=(0,3), dtype=np.float64)
         super()._housekeeping()
 
     ################################################################################
