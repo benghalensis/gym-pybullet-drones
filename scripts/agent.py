@@ -16,6 +16,7 @@ from stable_baselines3 import PPO
 
 from RacingDroneAviary import RacingDroneAviary
 from gym_pybullet_drones.envs.single_agent_rl.BaseSingleAgentAviary import ActionType, ObservationType
+from track import AlphaPilot, Single, Straight, HalfCircle
 
 register(
   id='RacingDroneAviary-v0',
@@ -31,6 +32,7 @@ DEFAULT_CPU = 1
 DEFAULT_STEPS = 1000000
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_LOAD = False
+DEFAULT_SAVE_NEW = True
 DEFAULT_LOAD_PATH = None
 
 class EvalCallbackMod(EvalCallback):
@@ -57,15 +59,25 @@ class EvalCallbackMod(EvalCallback):
         
     def _on_step(self):
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
-            # Plot values (here a random variable)
             drone_path = self.eval_env.envs[0].env.saved_drone_path
             figure, ax = plt.subplots()
             ax.plot(drone_path[:,0], drone_path[:,1])
             ax.set_aspect('equal')
-            # Close the figure after logging it
             self.logger.record("drone_trajectory", Figure(figure, close=True), exclude=("stdout", "log", "json", "csv"))
         super()._on_step()
 
+    def _on_rollout_end(self) -> None:
+        """
+        This event is triggered before updating the policy.
+        """
+        if not os.path.exists(self.log_path + '/drone_paths/'):
+            os.makedirs(self.log_path + '/drone_paths/')
+        save_path = self.log_path + '/drone_paths/' + '{:06d}'.format(self.n_calls) + '.npy'
+        drone_path = self.eval_env.envs[0].env.saved_drone_path
+        
+        with open(save_path, 'wb') as f:
+            np.save(f, drone_path)
+    
 
 def run(
     env=DEFAULT_ENV,
@@ -90,98 +102,44 @@ def run(
         else:
             print("[ERROR]: no model under the specified path", load_exp)
     else:
+        # pass
         #### Save directory ########################################
         filename = os.path.join(output_folder, 'save-'+env+'-'+algo+'-'+obs.value+'-'+act.value+'-'+datetime.now().strftime("%m.%d.%Y_%H.%M.%S"))
         if not os.path.exists(filename):
             os.makedirs(filename+'/')
 
-    # obstaclesCenterPosition = [[0,1.5,1], [0,3,1], [0,4.5,1], [0,6,1], [0,7.5,1]]
-    # obstaclesOrientation = [[0,0,0], [0,0,0], [0,0,0], [0,0,0], [0,0,0]]
-    # obstaclesStd = 0.25
-    # gate_width = 1.25
-    # initial_xyzs = np.array([[0.0,0.0,1.0]])
-    # initial_xyzs_std = 0.2
+    # track = HalfCircle()
+    track = Single()
 
-    # Alpha Pilot track
-    obstaclesCenterPosition = [[20.0, 5.0, 3.0], # Obs-1
-                               [15.0, 40.0, 3.0], # Obs-2
-                               [ 5.0, 30.0, 3.0], # Obs-3
-                               [ 0.0, 5.0, 3.0], # Obs-4
-                               [-5.0,-10.0, 3.0], # Obs-5
-                               [-5.0,-25.0, 3.0], # Obs-6
-                               [ 0.0,-30.0, 3.0], # Obs-7
-                               [ 5.0,-25.0, 3.0], # Obs-8
-                               [ 5.0,-10.0, 3.0], # Obs-9
-                               [-10.0, 5.0, 3.0], # Obs-10
-                               [-10.0, 35.0, 3.0], # Obs-11
-                               ]
-
-    obstaclesOrientation = [[0.0, 0.0, 0.0], # Obs-1
-                            [0.0, 0.0, np.pi/4], # Obs-2
-                            [0.0, 0.0, np.pi], # Obs-3
-                            [0.0, 0.0, np.pi], # Obs-4
-                            [0.0, 0.0, np.pi], # Obs-5
-                            [0.0, 0.0, 5/4*np.pi], # Obs-6
-                            [0.0, 0.0, 3/2*np.pi], # Obs-7
-                            [0.0, 0.0, 7/4*np.pi], # Obs-8
-                            [0.0, 0.0, 0.0], # Obs-9
-                            [0.0, 0.0, 0.0], # Obs-10
-                            [0.0, 0.0, 0.0], # Obs-11
-                            ]
-    obstaclesStd = 0.25
-    obstacleOrientationStd = 0.1
-    gate_width = 1.25
-    initial_xyzs = np.array([[20.0, -25.0, 3.0]])
-    initial_xyzs_std = 0.2
-
-    
     sa_env_kwargs = dict(aggregate_phy_steps=shared_constants.AGGR_PHY_STEPS, 
                          obs=obs, 
                          act=act, 
-                         initial_xyzs=initial_xyzs,
-                         initial_xyzs_std=initial_xyzs_std,
-                         obstaclesCenterPosition=obstaclesCenterPosition,
-                         obstaclesOrientation=obstaclesOrientation,
-                         obstaclesStd=obstaclesStd,
-                         gate_width=gate_width,
+                         initial_xyzs=track.initial_xyzs,
+                         initial_xyzs_std=track.initial_xyzs_std,
+                         obstaclesCenterPosition=track.obstaclesCenterPosition,
+                         obstaclesOrientation=track.obstaclesOrientation,
+                         obstaclesStd=track.obstaclesStd,
+                         obstacleOrientationStd=track.obstacleOrientationStd,
+                         gate_width=track.gate_width,
                          freq=120,
-                         gui=False,
-                         )
+                         gui=False)
+    
     train_env = make_vec_env(RacingDroneAviary,
                             env_kwargs=sa_env_kwargs,
                             n_envs=cpu,
-                            seed=0
-                            )
+                            seed=0)
+    
     eval_env = gym.make('RacingDroneAviary-v0',
                             aggregate_phy_steps=shared_constants.AGGR_PHY_STEPS,
                             obs=obs,
                             act=act,
-                            initial_xyzs=initial_xyzs,
-                            initial_xyzs_std=initial_xyzs_std,
-                            obstaclesCenterPosition=obstaclesCenterPosition,
-                            obstaclesOrientation=obstaclesOrientation,
-                            obstaclesStd=obstaclesStd,
-                            gate_width=gate_width,
+                            initial_xyzs=track.initial_xyzs,
+                            obstaclesCenterPosition=track.obstaclesCenterPosition,
+                            obstaclesOrientation=track.obstaclesOrientation,
+                            gate_width=track.gate_width,
                             freq=240,
                             gui=True)
-    # eval_env_kwargs = dict(aggregate_phy_steps=shared_constants.AGGR_PHY_STEPS, 
-    #                      obs=obs, 
-    #                      act=act, 
-    #                      obstaclesCenterPosition=obstaclesCenterPosition,
-    #                      obstaclesOrientation=obstaclesOrientation,
-    #                      obstaclesStd=obstaclesStd,
-    #                      gate_width=gate_width,
-    #                      gui=True,
-    #                      )
 
-    # eval_env = make_vec_env(RacingDroneAviary,
-    #                         env_kwargs=eval_env_kwargs,
-    #                         n_envs=cpu,
-    #                         seed=0
-    #                         )
-
-    # onpolicy_kwargs = dict(activation_fn=torch.nn.ReLU,
-    #                        net_arch=[512, 512, dict(vf=[256, 128], pi=[256, 128])])
     onpolicy_kwargs = dict(activation_fn=torch.nn.Tanh,
                            net_arch=[dict(vf=[128, 128], pi=[128, 128])])
 
@@ -213,7 +171,7 @@ def run(
     model.learn(total_timesteps=steps, #int(1e12),
                 callback=eval_callback,
                 log_interval=100,
-                reset_num_timesteps=False,
+                reset_num_timesteps=True,
                 )
 
     #### Save the model ########################################

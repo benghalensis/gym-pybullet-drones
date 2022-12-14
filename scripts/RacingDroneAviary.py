@@ -19,7 +19,7 @@ class RacingDroneAviary(BaseSingleAgentAviary):
     def __init__(self,
                  drone_model: DroneModel = DroneModel.CF2X,
                  initial_xyzs=None,
-                 initial_xyzs_std: float = 0.0,
+                 initial_xyzs_std: float = 0.001,
                  initial_rpys=None,
                  physics: Physics = Physics.PYB,
                  freq: int = 240,
@@ -320,9 +320,10 @@ class RacingDroneAviary(BaseSingleAgentAviary):
         wg = self.gate_width  # side length of the rectangular gate
 
         dmax = 2.5  # specifies a threshold on the distance to the gate center in order to activate the safety reward
-        a = 0.15  # hyperparameter that trades off between progress maximization and risk minimization
+        a = 0.4  # hyperparameter that trades off between progress maximization and risk minimization
         b = -0.0  # weight for penalty body rate
 
+        # I have switched of crash for now
         reward = final_reward(p, p_prev, prev_gate_center, current_gate_center, prev_gate_rotation, current_gate_rotation, a, b, dmax, wt, wg, crashed=self.crashed, crash_location=self.crash_location)
         # print("reward:", reward)
         return reward

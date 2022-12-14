@@ -72,15 +72,15 @@ def final_reward(p, p_prev, g1, g2, gm1, gm2, a, b, dmax, wt, wg, crashed, crash
         return reward
 
 if __name__ == "__main__":
-    prev_gate_center = np.array([0, 0, 0.625])  # gate1 centre (The gate it has cleared)
-    current_gate_center = np.array([0, 20, 0.625])  # gate2 centre (The gate in front of it)
-    prev_gate_rotation = R.from_euler('xyz', np.array([0.0, 0.0, 0.001])).as_matrix()
-    current_gate_rotation = R.from_euler('xyz', np.array([0.0, 0.0, 0.001])).as_matrix()
+    prev_gate_center = np.array([20.0, 5.0, 3.0])  # gate1 centre (The gate it has cleared)
+    current_gate_center = np.array([15.0, 40.0, 3.0])  # gate2 centre (The gate in front of it)
+    prev_gate_rotation = R.from_euler('xyz', np.array([0.0, 0.0, 0.0])).as_matrix()
+    current_gate_rotation = R.from_euler('xyz', np.array([0.0, 0.0, np.pi/4])).as_matrix()
     ang_vel = np.array([0.0, 0.0, 0.0])  # body rates
     debug = True
     
-    p = np.array([0.1, 10.0, 0.625])  # current position
-    p_prev = np.array([0, 2.4, 0.625])  # previous position
+    p = np.array([25.0, 7.0, 3.0])  # current position
+    p_prev = np.array([20.0, 5.0, 3.0])  # previous position
     wg = 0.75  # side length of the rectangular gate
     crash_location = np.array([0, 4, 1])
 
